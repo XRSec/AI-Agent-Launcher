@@ -37,6 +37,8 @@ pub fn setup_tray(app: &AppHandle) -> Result<(), Box<dyn std::error::Error>> {
         .on_menu_event(|app, event| {
             match event.id().as_ref() {
                 "show_window" => {
+                    #[cfg(target_os = "macos")]
+                    let _ = app.set_activation_policy(tauri::ActivationPolicy::Regular);
                     if let Some(window) = app.get_webview_window("main") {
                         let _ = window.show();
                         let _ = window.unminimize();
@@ -72,6 +74,8 @@ pub fn setup_tray(app: &AppHandle) -> Result<(), Box<dyn std::error::Error>> {
             } = event
             {
                 if let Some(window) = tray.app_handle().get_webview_window("main") {
+                    #[cfg(target_os = "macos")]
+                    let _ = tray.app_handle().set_activation_policy(tauri::ActivationPolicy::Regular);
                     let _ = window.show();
                     let _ = window.unminimize();
                     let _ = window.set_focus();

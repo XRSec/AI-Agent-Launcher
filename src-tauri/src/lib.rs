@@ -90,6 +90,8 @@ pub fn run() {
                 } else {
                     // User clicked close button (X / red traffic light): hide to tray
                     let _ = window.hide();
+                    #[cfg(target_os = "macos")]
+                    let _ = window.app_handle().set_activation_policy(tauri::ActivationPolicy::Accessory);
                     api.prevent_close();
                 }
             }
