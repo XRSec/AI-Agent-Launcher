@@ -1,4 +1,16 @@
+# Build artifacts
+dist/
 .build/
 .swiftpm/
-dist/
+src-tauri/target/
+node_modules/
+
+# OS and IDE
 .DS_Store
+*.p12
+*.pem
+*.key
+certs/
+.idea/
+.vscode/
+*.log

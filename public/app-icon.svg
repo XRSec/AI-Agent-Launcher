@@ -1,0 +1,99 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024">
+  <defs>
+    <!-- Background Gradients -->
+    <linearGradient id="squircleBg" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#2d2824"/>
+      <stop offset="50%" stop-color="#211d1a"/>
+      <stop offset="100%" stop-color="#151210"/>
+    </linearGradient>
+
+    <radialGradient id="ambientGlow" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#d97706" stop-opacity="0.32"/>
+      <stop offset="45%" stop-color="#d97706" stop-opacity="0.12"/>
+      <stop offset="100%" stop-color="#d97706" stop-opacity="0"/>
+    </radialGradient>
+
+    <!-- Bevel Highlights -->
+    <linearGradient id="innerBevel" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#ffffff" stop-opacity="0.22"/>
+      <stop offset="15%" stop-color="#ffffff" stop-opacity="0.08"/>
+      <stop offset="85%" stop-color="#ffffff" stop-opacity="0.0"/>
+      <stop offset="100%" stop-color="#ffffff" stop-opacity="0.04"/>
+    </linearGradient>
+
+    <!-- Claude Spark Gradients -->
+    <linearGradient id="sparkGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#fef08a"/>
+      <stop offset="25%" stop-color="#fbbf24"/>
+      <stop offset="65%" stop-color="#f59e0b"/>
+      <stop offset="100%" stop-color="#d97706"/>
+    </linearGradient>
+
+    <linearGradient id="sparkAccent" x1="0%" y1="100%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#ea580c"/>
+      <stop offset="60%" stop-color="#f59e0b"/>
+      <stop offset="100%" stop-color="#fef08a"/>
+    </linearGradient>
+
+    <linearGradient id="chevronGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#ffffff"/>
+      <stop offset="100%" stop-color="#fef3c7"/>
+    </linearGradient>
+
+    <!-- Drop Shadow Filter for macOS Squircle -->
+    <filter id="macDropShadow" x="-10%" y="-10%" width="120%" height="125%">
+      <feDropShadow dx="0" dy="28" stdDeviation="32" flood-color="#000000" flood-opacity="0.45"/>
+      <feDropShadow dx="0" dy="8" stdDeviation="12" flood-color="#000000" flood-opacity="0.25"/>
+    </filter>
+
+    <filter id="coreGlow" x="-20%" y="-20%" width="140%" height="140%">
+      <feGaussianBlur stdDeviation="18" result="blur"/>
+      <feComposite in="SourceGraphic" in2="blur" operator="over"/>
+    </filter>
+  </defs>
+
+  <!-- 1. Ambient Background Glow Behind Shape -->
+  <circle cx="512" cy="512" r="420" fill="url(#ambientGlow)"/>
+
+  <!-- 2. Main macOS App Squircle (Apple Standard 896x896 at 1024 canvas) -->
+  <g filter="url(#macDropShadow)">
+    <rect x="64" y="64" width="896" height="896" rx="200" fill="url(#squircleBg)"/>
+    <!-- Subtle Inner Border Highlight -->
+    <rect x="64" y="64" width="896" height="896" rx="200" fill="none" stroke="url(#innerBevel)" stroke-width="2.5"/>
+  </g>
+
+  <!-- 3. Inner Concentric Texture / Dial Plate -->
+  <circle cx="512" cy="512" r="320" fill="#181513" stroke="#38322c" stroke-width="1.5" stroke-dasharray="8 6"/>
+  <circle cx="512" cy="512" r="280" fill="url(#ambientGlow)"/>
+
+  <!-- 4. Claude Signature Asterisk / Spark Emblem in Warm Glowing Amber -->
+  <g filter="url(#coreGlow)">
+    <!-- 8 Radiant Rays of Claude Spark -->
+    <!-- Ray 0 (Vertical) -->
+    <rect x="480" y="250" width="64" height="524" rx="32" fill="url(#sparkGrad)"/>
+    <!-- Ray 90 (Horizontal) -->
+    <rect x="250" y="480" width="524" height="64" rx="32" fill="url(#sparkGrad)"/>
+    <!-- Ray 45 (Diagonal 1) -->
+    <rect x="480" y="250" width="64" height="524" rx="32" fill="url(#sparkAccent)" transform="rotate(45 512 512)"/>
+    <!-- Ray -45 (Diagonal 2) -->
+    <rect x="480" y="250" width="64" height="524" rx="32" fill="url(#sparkAccent)" transform="rotate(-45 512 512)"/>
+  </g>
+
+  <!-- 5. Central Intelligence Core (Dark Inset Plate with Terminal Chevron) -->
+  <circle cx="512" cy="512" r="148" fill="#161311" stroke="#fbbf24" stroke-width="3" stroke-opacity="0.8"/>
+  <circle cx="512" cy="512" r="144" fill="#1c1815"/>
+
+  <!-- 6. Terminal Prompt Chevron ❯ & Cursor _ in the Heart of the Core -->
+  <path d="M 462 452 L 522 512 L 462 572" 
+        fill="none" 
+        stroke="url(#chevronGrad)" 
+        stroke-width="20" 
+        stroke-linecap="round" 
+        stroke-linejoin="round"/>
+
+  <!-- Cursor block -->
+  <line x1="538" y1="570" x2="574" y2="570" 
+        stroke="#f59e0b" 
+        stroke-width="16" 
+        stroke-linecap="round"/>
+</svg>

@@ -1,212 +1,144 @@
-# Pi Web for macOS
+# AI Agent Launcher
 
-一个用于管理 [Pi Web](https://github.com/agegr/pi-web) 的原生 macOS 菜单栏应用。
+一个基于 **Tauri v2 + Rust + Vue 3** 打造的现代化跨平台 AI Agent 启动与进程管理桌面工具，支持 **macOS · Windows · Linux**。
 
-无需长期打开终端，即可启动、停止、重启和打开 `@agegr/pi-web`，并通过原生设置界面管理监听地址、端口、Allowed Hosts、工作目录和 Basic Auth。
+告别在终端频繁输入复杂命令、繁琐配置环境路径以及翻查后台僵死进程——只需录入专属于每个 Agent 的启动命令或脚本，即可一键并发启动、停止、异常自动恢复，并在专属控制台中实时查看运行日志。
 
-> [!IMPORTANT]
-> 本项目不是 Pi Web 本体，也不是 Pi Web 官方项目。
-> Web UI、Pi 会话与模型管理能力由上游 [`@agegr/pi-web`](https://github.com/agegr/pi-web) 提供；本项目负责 macOS 侧的启动、配置和进程管理。
+---
 
-## 为什么做这个项目
+## ✨ 核心特性
 
-Pi Web 本身已经提供完整的浏览器界面，但日常使用时仍需要从终端启动服务、维护启动参数和环境变量。
+- **跨平台原生支持**：
+  - **macOS**：原生适配 Universal Binary 通用架构（一份安装包原生兼容 Apple Silicon M1~M4 与 Intel 芯片）。
+  - **Windows**：原生适配 Windows 10 / 11（支持 NSIS 与 MSI 安装包）。
+  - **Linux**：原生适配 Ubuntu、Debian 等各大主流发行版（支持 `.deb` 与 `.AppImage`）。
+- **Claude Code 风格暖色美学**：
+  - 采用优雅沉稳的暖沙黄（`#f7f4ee`）与暖岩色边框，告别刺眼的纯白与纯黑生硬反差。
+  - 专属实时日志控制台采用深色暖焦炭黑（`#1c1917`）高对比设计，滚动条与控制台深度同步。
+  - 侧边栏支持平滑拖拽缩放与极窄 Rail 导轨折叠模式。
+- **三档多语言国际化（i18n）**：
+  - **自动 / Auto**：智能感知操作系统与浏览器语言，中文环境显示中文，其余环境自动切换为 English。
+  - **中文**：全界面强制简体中文。
+  - **English**：全界面强制英文。
+  - 位于界面右上角，一键即时无缝热切换，本地持久化记忆。
+- **孤儿进程与端口防泄漏清理（Residual Cleaner）**：
+  - 针对外部应用意外退出或终端闪退导致后台进程未退、端口被占的情况，提供专属「清理」机制。
+  - 自动递归探测孤儿进程与占用端口并强制释放，确保随时干净重启。
+- **多 Profile 独立配置管理**：
+  - **命令 / 启动脚本**：独立编辑专属代码，支持多行输入与 Tab 缩进。
+  - **执行 Shell**：支持自动识别或指定解释器（macOS/Linux: `/bin/zsh`、`/bin/bash`、`/bin/sh`；Windows: `PowerShell`、`cmd`、`pwsh`）。
+  - **独立 PATH 环境变量**：可自定义隔离 PATH，内置“一键检测”当前系统环境（Homebrew、Volta、Nvm、Pyenv、Cargo、Local Bin 等）。
+  - **重启策略 (Restart Policy)**：
+    - `不自动重启 (no)`：手动控制启停。
+    - `始终自动重启 (always)`：进程退出后按设定延迟重新拉起。
+    - `仅异常退出时重启 (on-failure)`：仅在退出码非 0 时自动恢复。
+    - **重启延迟**：支持自定义间隔秒数（1~60s）。
+  - **开机/随软件自启**：标记随 Launcher 启动后自动拉起。
+  - **工作目录**：原生目录选择弹窗，轻松绑定执行根目录。
+- **专属实时日志控制台**：
+  - 每个 Agent 拥有独立的日志缓冲流，互不干扰。
+  - 支持智能自动滚动、大文本安全截断与一键清空日志。
+- **系统托盘常驻 (System Tray)**：
+  - 支持窗口最小化到托盘、托盘菜单常驻以及一键唤起主窗口。
 
-Pi Web for macOS 将这部分工作收进一个常驻菜单栏的小应用：
+---
 
-- 不需要每次手动输入 `pi-web` 命令
-- 可以直接从菜单栏启动、停止和重启服务
-- 使用原生设置界面修改常用运行参数
-- 自动查找 PATH、Homebrew、Volta、nvm 等常见位置中的 `pi-web` 可执行文件
-- 将访问密码保存在 macOS Keychain，而不是普通配置文件中
-- 适合把 Pi Web 作为长期运行的本地开发工具使用
+## 🚀 本地开发与构建
 
-## 功能
+### 前置环境
 
-- **菜单栏控制**：启动、停止、重启、打开 Pi Web
-- **服务状态**：显示运行状态、访问地址和启动错误
-- **监听配置**：设置监听 IP 与端口
-- **环境变量**：`PATH`、`PI_WEB_ALLOWED_HOSTS`、`PI_WEB_PASSWORD`、`PI_WEB_CWD`、`PI_WEB_NO_OPEN`、`NODE_OPTIONS` 均可修改，并支持添加自定义变量
-- **Keychain 存储**：`PI_WEB_PASSWORD` 写入 macOS Keychain，不以明文保存在偏好设置中
-- **工作目录**：通过图形目录选择器设置 Pi Web 工作目录
-- **Node Bin Path**：留空自动扫描 PATH、Homebrew、Volta、nvm，也可手动指定 Node 的 `bin` 目录
-- **Pi Web Path**：留空自动检测 `pi-web`，也可直接指定可执行文件路径
-- **自动启动**：打开应用后自动启动 Pi Web
-- **自动打开网页**：服务启动成功后自动打开浏览器
-- **端口冲突处理**：启动前检查并停止占用同一端口的已有 Pi Web 进程
-- **本机地址校验**：监听非本机已有 IP 时拒绝启动，避免错误绑定
+- [Node.js](https://nodejs.org/) (>= 18) 与 [pnpm](https://pnpm.io/) (>= 9)
+- [Rust](https://www.rust-lang.org/) (>= 1.77)
+- Linux 用户需安装 WebKitGTK 与相关开发库（见下文常见构建依赖）
 
-## 工作方式
+### 常用命令（Makefile）
+
+项目内置了标准 `Makefile`，开发者可直接使用以下指令：
+
+```bash
+# 查看所有可用指令与说明
+make help
+
+# 1. 安装项目依赖
+make install
+
+# 2. 启动桌面端开发模式（热重载）
+make dev
+
+# 3. 执行全套代码类型检查（Vue 3 TS + Rust 编译检查）
+make check
+
+# 4. 运行 Rust 后端单元测试
+make test
+
+# 5. 从 src-tauri/icons/icon.svg 一键重新生成多平台全尺寸应用图标并同步至 Web
+make icons
+
+# 6. 构建正式 Release 发布包
+make build
+
+# 7. 清理历史遗留资源与构建产物
+make clean          # 清理 dist 与 release bundle
+make clean-legacy   # 清理历史旧版 Swift/SPM 遗留缓存与无用旧资源
+make clean-all      # 深度清理（包含 node_modules 与 target 缓存）
+```
+
+也可以直接使用 npm/pnpm 脚本：
+
+```bash
+# 本地开发
+pnpm tauri dev
+
+# 打包构建
+pnpm tauri build
+```
+
+打包产物位于 `src-tauri/target/release/bundle/`：
+- **macOS**：`macos/AI Agent Launcher.app` 与 `dmg/AI Agent Launcher_1.0.0_universal.dmg`
+- **Windows**：`nsis/AI Agent Launcher_1.0.0_x64-setup.exe` 与 `msi/`
+- **Linux**：`deb/` 与 `appimage/`
+
+---
+
+## 📁 项目架构
 
 ```text
-Pi Web for macOS
-        │
-        ├── 读取原生设置 / macOS Keychain
-        │
-        ├── 查找 pi-web 可执行文件
-        │
-        └── 启动 @agegr/pi-web
-                    │
-                    └── Pi / ~/.pi/agent / 本地项目
+AI-Agent-Launcher/
+├── Makefile                   # 统一构建、开发与清理任务管理
+├── package.json               # 前端依赖与构建脚本配置
+├── vite.config.ts             # Vite 配置
+├── tsconfig.json              # TypeScript 编译配置
+├── index.html                 # 前端 HTML 模板与全局防选中样式
+├── public/                    # 静态 Web 资源 (Vite)
+│   ├── app-icon.svg           # 矢量 SVG 图标
+│   └── favicon.png            # 页面微标
+├── src/                       # 前端渲染层 (Vue 3 + TypeScript + Vite)
+│   ├── App.vue                # 主界面：Profile 侧栏、配置卡片、实时终端与顶栏
+│   ├── i18n.ts                # 自动/中文/英文三档国际化字典与响应式切换逻辑
+│   ├── main.ts                # 前端主入口
+│   └── types.ts               # TypeScript 数据模型与接口定义
+├── src-tauri/                 # 原生后端 (Rust + Tauri v2)
+│   ├── Cargo.toml             # Rust 依赖声明 (tauri, tokio, uuid, serde 等)
+│   ├── tauri.conf.json        # 窗口布局、应用标识、权限与打包规格配置
+│   ├── capabilities/          # Tauri v2 安全权限与功能白名单
+│   ├── icons/                 # 全平台多尺寸生成的图标资源与母版 (icon.svg)
+│   └── src/
+│       ├── main.rs            # Rust 程序入口
+│       ├── lib.rs             # 全局状态管理、生命周期钩子与插件挂载
+│       ├── menu.rs            # 原生系统菜单栏 (Standard App Menu & Shortcuts)
+│       ├── tray.rs            # 跨平台系统托盘常驻与菜单
+│       ├── runner.rs          # 进程树管理、Shell 执行、孤儿端口查杀与自动重启
+│       ├── commands.rs        # 前后端交互 IPC Command 接口
+│       ├── models.rs          # 数据结构定义 (AgentProfile, ProfileStatus 等)
+│       ├── path_detect.rs     # 系统全局 PATH 自动侦测逻辑
+│       └── state.rs           # 本地 JSON 数据持久化与并发锁状态
+└── .github/workflows/         # 持续集成与发布
+    ├── ci.yml                 # 跨平台 (macOS/Ubuntu/Windows) PR 与 Push 自动化检查
+    └── release.yml            # 基于 tauri-action@v1 的多平台自动构建发布工作流
 ```
 
-这个应用不会重新实现 Pi Web，也不会内置一套独立的会话或模型系统。
+---
 
-## 系统要求
+## 📄 开源许可证
 
-目前项目面向：
-
-- macOS 11 Big Sur 或更高版本
-- Apple Silicon（arm64）或 Intel（x86_64）Mac
-- Node.js 22.19.0 或更高版本
-- npm
-- 全局安装的 `@agegr/pi-web`
-
-Pi Web 的 Node.js 最低版本要求来自上游项目。
-
-## 安装 Pi Web
-
-本项目直接查找 npm 全局安装后生成的 `pi-web` 可执行文件，因此需要先全局安装 Pi Web：
-
-```bash
-npm install -g @agegr/pi-web@latest
-```
-
-确认安装：
-
-```bash
-pi-web --help
-```
-
-如果使用 nvm，本应用会直接扫描 `~/.nvm/versions/node/*/bin`。不会 `source ~/.nvm/nvm.sh`，也不会启动登录 Shell。也可以在设置中直接指定 **Node Bin Path** 和 **Pi Web Path**；手动值优先于自动检测。
-
-## 从源码构建
-
-在项目目录执行：
-
-```bash
-./build-app.sh
-```
-
-脚本会：
-
-1. 使用 Swift Package Manager 编译 Release 版本
-2. 创建 `dist/Pi Web.app`
-3. 写入 App 的 `Info.plist`
-4. 加入 `PiWeb.icns`
-5. 使用 ad-hoc 签名
-6. 将 App 复制到 `/Applications/Pi Web.app`
-
-也可以只编译 Swift executable：
-
-```bash
-swift build -c release
-```
-
-## 使用
-
-启动 `Pi Web.app` 后，菜单栏会出现 Pi Web 图标。
-
-菜单中提供：
-
-- 启动 Pi Web
-- 停止 Pi Web
-- 重启 Pi Web
-- 打开 Pi Web
-- 设置
-- 退出
-
-首次使用建议先打开 **设置**，检查监听 IP、端口、运行时路径、环境变量和工作目录，再启动服务。
-
-## 设置说明
-
-| 设置 | 对应 Pi Web 配置 | 说明 |
-| --- | --- | --- |
-| 监听 IP | `--hostname` | Pi Web 实际监听的本机网络地址 |
-| 端口 | `--port` | Web 服务端口 |
-| Node Bin Path | `PATH` | 留空自动检测；填写后把指定 Node `bin` 目录放到最终 PATH 前面 |
-| Pi Web Path | 可执行文件 | 留空自动检测 `pi-web`；也可直接指定路径 |
-| PATH | `PATH` | 运行时 PATH；留空自动检测生成，支持手动修改或点击重新检测 |
-| Allowed Hosts | `PI_WEB_ALLOWED_HOSTS` | 默认环境变量；允许的代理或自定义 Host，多个值使用逗号分隔 |
-| 密码 | `PI_WEB_PASSWORD` | 默认环境变量；启用 HTTP Basic Auth，值存放于 macOS Keychain |
-| 工作目录 | 进程 cwd | Pi Web 进程实际启动所在目录 |
-| PI_WEB_CWD | `PI_WEB_CWD` | 留空跟随工作目录；也可以单独指定不同路径 |
-| NODE_OPTIONS | `NODE_OPTIONS` | 传递给 Node.js 的运行参数 |
-| 自定义环境变量 | 自定义 | 可在设置中点击“添加变量”追加 |
-| 自动启动 | App 设置 | 打开本应用后自动启动 Pi Web |
-| 自动打开网页 | App 设置 | 服务启动后由 Launcher 统一在默认浏览器中打开（已默认带 `--no-open` 避免重复拉起） |
-
-修改运行参数后，点击 **应用并重启** 即可让新配置立即生效。
-
-## 局域网访问
-
-如果希望其他设备访问 Pi Web，需要把监听 IP 设置为这台 Mac 实际拥有的局域网地址。
-
-应用启动前会通过系统网络接口检查这个 IP。如果当前 Mac 没有配置该地址，Pi Web 不会启动。
-
-如果通过域名、反向代理或 Tunnel 访问，还需要把对应 Host 加入 **Allowed Hosts**。
-
-## 安全说明
-
-Pi Web 可以访问本地项目、会话，并执行 Agent 工具，因此不要把一个没有保护的实例直接暴露到公网。
-
-如果监听非回环地址，建议至少设置访问密码。
-
-密码由本应用保存在 **macOS Keychain** 中，并在启动 Pi Web 时通过 `PI_WEB_PASSWORD` 环境变量传递。
-
-需要注意：HTTP Basic Auth 本身不会加密网络传输。如果需要跨公网访问，请使用 HTTPS 反向代理、可信 VPN 或安全 Tunnel，不要直接通过明文 HTTP 暴露 Pi Web。
-
-## 与上游 Pi Web 的关系
-
-上游项目：
-
-- [`agegr/pi-web`](https://github.com/agegr/pi-web)
-- npm：`@agegr/pi-web`
-
-Pi Web 提供真正的 Web UI，包括 Pi 会话、Agent、模型配置、项目文件、Git 等功能。
-
-本项目只负责 macOS 原生控制层：
-
-```text
-上游 Pi Web = Web UI / Agent 功能
-本项目       = macOS 菜单栏启动器 / 配置器 / 进程管理器
-```
-
-如果遇到 Web UI、Pi 会话、模型 Provider 或 Agent 本身的问题，应优先查看上游 Pi Web 项目；如果问题发生在 macOS 启动、菜单栏、Keychain、Node/npm 发现或进程管理，则属于本项目范围。
-
-## 项目结构
-
-```text
-Pi-Web/
-├── Package.swift
-├── build-app.sh
-├── Resources/
-│   └── PiWeb.icns
-└── Sources/
-    └── PiWeb/
-        ├── AppDefaults.swift
-        ├── PiWebApp.swift
-        ├── PiWebController.swift
-        └── SecretStore.swift
-```
-
-核心实现全部使用 Swift / SwiftUI / AppKit，没有额外 Swift 第三方依赖。
-
-## 开发
-
-```bash
-swift build
-swift run PiWeb
-```
-
-正式打包：
-
-```bash
-./build-app.sh
-```
-
-## 致谢
-
-感谢 [`agegr/pi-web`](https://github.com/agegr/pi-web) 提供 Pi 的 Web UI。
-
-同时感谢 [Pi Coding Agent](https://github.com/earendil-works/pi) 及其生态项目。
+本项目基于 [MIT License](LICENSE) 开源。
