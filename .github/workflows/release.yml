@@ -22,18 +22,54 @@ permissions:
 
 jobs:
   release:
+    name: Build (${{ matrix.platform }} - ${{ matrix.arch }})
     permissions:
       contents: write
     strategy:
       fail-fast: false
       matrix:
         include:
+          # macOS Universal (Dual Arch: arm64 + x86_64 in single bundle)
           - platform: "macos-latest"
+            arch: "universal"
             args: "--target universal-apple-darwin"
+            rust_target: "universal"
+
+          # macOS Apple Silicon (arm64)
+          - platform: "macos-latest"
+            arch: "arm64"
+            args: "--target aarch64-apple-darwin"
+            rust_target: "aarch64-apple-darwin"
+
+          # macOS Intel (x86_64 / amd64)
+          - platform: "macos-latest"
+            arch: "x86_64"
+            args: "--target x86_64-apple-darwin"
+            rust_target: "x86_64-apple-darwin"
+
+          # Linux amd64 (x86_64)
           - platform: "ubuntu-22.04"
+            arch: "amd64"
             args: ""
+            rust_target: ""
+
+          # Linux arm64 (aarch64) - Native ARM64 Runner
+          - platform: "ubuntu-24.04-arm"
+            arch: "arm64"
+            args: ""
+            rust_target: ""
+
+          # Windows amd64 (x86_64)
           - platform: "windows-latest"
+            arch: "x86_64"
             args: ""
+            rust_target: ""
+
+          # Windows arm64 (aarch64)
+          - platform: "windows-latest"
+            arch: "arm64"
+            args: "--target aarch64-pc-windows-msvc --bundles nsis"
+            rust_target: "aarch64-pc-windows-msvc"
 
     runs-on: ${{ matrix.platform }}
     steps:
@@ -54,16 +90,20 @@ jobs:
         uses: dtolnay/rust-toolchain@stable
 
       - name: Add macOS Universal targets
-        if: matrix.platform == 'macos-latest'
+        if: matrix.rust_target == 'universal'
         run: rustup target add aarch64-apple-darwin x86_64-apple-darwin
+
+      - name: Add Specific Rust Target (${{ matrix.rust_target }})
+        if: matrix.rust_target != '' && matrix.rust_target != 'universal'
+        run: rustup target add ${{ matrix.rust_target }}
 
       - name: Rust cache
         uses: swatinem/rust-cache@v2
         with:
           workspaces: "./src-tauri -> target"
 
-      - name: Install dependencies (Ubuntu only)
-        if: matrix.platform == 'ubuntu-22.04'
+      - name: Install dependencies (Linux only)
+        if: startsWith(matrix.platform, 'ubuntu')
         run: |
           sudo apt-get update
           sudo apt-get install -y libwebkit2gtk-4.1-dev libgtk-3-dev libayatana-appindicator3-dev librsvg2-dev patchelf build-essential curl wget file libssl-dev libxdo-dev
@@ -77,6 +117,8 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           tagName: ${{ github.event.inputs.version || github.ref_name }}
+          releaseName: "AI Agent Launcher ${{ github.event.inputs.version || github.ref_name }}"
+          releaseBody: "AI Agent Launcher 跨平台版本（支持 macOS · Windows · Linux 的 arm64 与 amd64 完整多架构安装包）。"
           releaseDraft: true
           prerelease: false
           args: ${{ matrix.args }}

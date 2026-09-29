@@ -35,10 +35,17 @@
 
 ## ✨ 核心特性
 
-### 🖥️ 跨平台原生支持
-- **macOS**：原生适配 Universal Binary 通用架构（一份 DMG 安装包原生免转译兼容 Apple Silicon M1~M4 与 Intel 芯片）。
-- **Windows**：原生适配 Windows 10 / 11（生成轻量 NSIS 安装包与 MSI 安装包，支持开机启动与托盘常驻）。
-- **Linux**：原生适配 Ubuntu、Debian 等各大主流发行版（提供 `.deb` 与 `.AppImage`）。
+### 🖥️ 全平台双架构原生支持 (ARM64 & AMD64)
+- **macOS**：
+  - **Apple Silicon (arm64)**：`AI.Agent.Launcher_x.x.x_aarch64.dmg`（原生适配 M1~M4 芯片）
+  - **Intel (x86_64 / amd64)**：`AI.Agent.Launcher_x.x.x_x64.dmg`
+  - **Universal Binary**：`AI.Agent.Launcher_x.x.x_universal.dmg`（双架构通用安装包）
+- **Windows**：
+  - **x64 (amd64)**：`AI.Agent.Launcher_x.x.x_x64-setup.exe` 与 `.msi`
+  - **ARM64 (aarch64)**：`AI.Agent.Launcher_x.x.x_arm64-setup.exe`（原生适配 Windows on ARM 及高通骁龙 X Elite / Surface 等设备）
+- **Linux**：
+  - **x86_64 (amd64)**：`_amd64.deb`、`_amd64.AppImage` 与 `.rpm`
+  - **ARM64 (aarch64)**：`_arm64.deb`、`_arm64.AppImage` 与 `.rpm`（原生适配 Raspberry Pi、ARM 服务器与统信/麒麟等国产 Linux）
 
 ### 🎨 Claude Code 暖色设计美学
 - 界面采用优雅沉稳的暖沙黄（`#f7f4ee`）与暖岩色边框，告别刺眼纯白与纯黑生硬反差。
@@ -140,9 +147,9 @@ pnpm tauri build   # 桌面端打包构建
 ```
 
 打包产物位于 `src-tauri/target/release/bundle/`：
-- **macOS**：`macos/AI Agent Launcher.app` 与 `dmg/AI Agent Launcher_1.0.0_universal.dmg`
-- **Windows**：`nsis/AI Agent Launcher_1.0.0_x64-setup.exe` 与 `msi/`
-- **Linux**：`deb/` 与 `appimage/`
+- **macOS**：`macos/` 与 `dmg/`（支持 `universal`、`aarch64` 与 `x64`）
+- **Windows**：`nsis/`（`.exe`，支持 `x64` 与 `arm64`）以及 `msi/`（`.msi`，支持 `x64`）
+- **Linux**：`deb/`、`appimage/` 与 `rpm/`（支持 `amd64` 与 `arm64`）
 
 ---
 
