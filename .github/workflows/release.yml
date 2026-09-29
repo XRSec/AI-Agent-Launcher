@@ -77,8 +77,26 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           tagName: ${{ github.event.inputs.version || github.ref_name }}
-          releaseName: "AI Agent Launcher ${{ github.event.inputs.version || github.ref_name }}"
-          releaseBody: "AI Agent Launcher 跨平台版本（支持 macOS · Windows · Linux）。"
-          releaseDraft: ${{ github.event.inputs.draft == true || github.event.inputs.draft == 'true' }}
+          releaseDraft: true
           prerelease: false
           args: ${{ matrix.args }}
+
+  publish:
+    name: Publish Release
+    needs: release
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    if: ${{ !(github.event.inputs.draft == true || github.event.inputs.draft == 'true') }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Publish Release to Public
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          TAG="${{ github.event.inputs.version || github.ref_name }}"
+          echo "==> Publishing Release $TAG..."
+          gh release edit "$TAG" --draft=false --latest
+          echo "==> Release published successfully!"
