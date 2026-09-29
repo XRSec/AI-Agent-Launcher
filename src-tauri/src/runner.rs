@@ -1,5 +1,4 @@
 use std::collections::HashMap;
-use std::path::Path;
 use std::process::Stdio;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
@@ -246,9 +245,9 @@ async fn start_agent_impl(app: AppHandle, profile: AgentProfile) -> Result<(), S
         let shell_input = profile.shell.trim();
         let shell = if !shell_input.is_empty() && shell_input != "auto" {
             shell_input
-        } else if Path::new("/bin/zsh").exists() {
+        } else if std::path::Path::new("/bin/zsh").exists() {
             "/bin/zsh"
-        } else if Path::new("/bin/bash").exists() {
+        } else if std::path::Path::new("/bin/bash").exists() {
             "/bin/bash"
         } else {
             "sh"
