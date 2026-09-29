@@ -1,13 +1,28 @@
 use tauri::{
-    menu::{MenuBuilder, MenuItemBuilder},
+    menu::{CheckMenuItemBuilder, MenuBuilder, MenuItemBuilder},
     tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
-    AppHandle, Manager,
+    AppHandle, Emitter, Listener, Manager,
 };
+use tauri_plugin_autostart::ManagerExt;
 use crate::runner::stop_all_agents;
 
 pub fn setup_tray(app: &AppHandle) -> Result<(), Box<dyn std::error::Error>> {
+    let autostart_enabled = app.autolaunch().is_enabled().unwrap_or(false);
+    let autostart_item = CheckMenuItemBuilder::with_id("toggle_autostart", "开机自启动")
+        .checked(autostart_enabled)
+        .build(app)?;
+
+    let autostart_item_listener = autostart_item.clone();
+    app.listen("frontend-autostart-changed", move |event| {
+        if let Ok(enabled) = serde_json::from_str::<bool>(event.payload()) {
+            let _ = autostart_item_listener.set_checked(enabled);
+        }
+    });
+
     let menu = MenuBuilder::new(app)
         .item(&MenuItemBuilder::with_id("show_window", "显示主窗口").build(app)?)
+        .separator()
+        .item(&autostart_item)
         .separator()
         .item(&MenuItemBuilder::with_id("quit", "退出").build(app)?)
         .build()?;
@@ -27,6 +42,17 @@ pub fn setup_tray(app: &AppHandle) -> Result<(), Box<dyn std::error::Error>> {
                         let _ = window.unminimize();
                         let _ = window.set_focus();
                     }
+                }
+                "toggle_autostart" => {
+                    let autolaunch = app.autolaunch();
+                    let is_on = autolaunch.is_enabled().unwrap_or(false);
+                    if is_on {
+                        let _ = autolaunch.disable();
+                    } else {
+                        let _ = autolaunch.enable();
+                    }
+                    let new_state = !is_on;
+                    let _ = app.emit("autostart-changed", new_state);
                 }
                 "quit" => {
                     let app_clone = app.clone();

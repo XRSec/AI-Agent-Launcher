@@ -1,8 +1,13 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, nextTick } from "vue";
 import { invoke } from "@tauri-apps/api/core";
-import { listen } from "@tauri-apps/api/event";
+import { emit, listen } from "@tauri-apps/api/event";
 import { open } from "@tauri-apps/plugin-dialog";
+import {
+  enable as enableAutostart,
+  disable as disableAutostart,
+  isEnabled as isAutostartEnabled,
+} from "@tauri-apps/plugin-autostart";
 import type { AgentProfile, ProfileStatus, ProfileLogMessage, RestartPolicy } from "./types";
 import { languageSetting, setLanguageSetting, t, type LanguageSetting } from "./i18n";
 
@@ -14,6 +19,9 @@ const autoScroll = ref(true);
 const detectionMessage = ref("");
 const cleanToast = ref("");
 const logContainer = ref<HTMLDivElement | null>(null);
+
+const appAutostart = ref(false);
+const autostartLoading = ref(false);
 
 const runningSnapshots = ref<Record<string, AgentProfile>>({});
 
@@ -387,6 +395,38 @@ function handleTabKey(e: KeyboardEvent) {
   }
 }
 
+async function toggleAppAutostart() {
+  if (autostartLoading.value) return;
+  autostartLoading.value = true;
+  try {
+    if (appAutostart.value) {
+      await disableAutostart();
+      appAutostart.value = false;
+      cleanToast.value = t.value.autostartDisabledToast;
+    } else {
+      await enableAutostart();
+      appAutostart.value = true;
+      cleanToast.value = t.value.autostartEnabledToast;
+    }
+    await emit("frontend-autostart-changed", appAutostart.value);
+    setTimeout(() => {
+      if (
+        cleanToast.value === t.value.autostartEnabledToast ||
+        cleanToast.value === t.value.autostartDisabledToast
+      ) {
+        cleanToast.value = "";
+      }
+    }, 3000);
+  } catch (err: any) {
+    cleanToast.value = `Autostart error: ${err}`;
+    setTimeout(() => {
+      cleanToast.value = "";
+    }, 4000);
+  } finally {
+    autostartLoading.value = false;
+  }
+}
+
 function scrollToBottom() {
   if (!autoScroll.value) return;
   nextTick(() => {
@@ -398,6 +438,27 @@ function scrollToBottom() {
 
 onMounted(async () => {
   await loadData();
+
+  try {
+    appAutostart.value = await isAutostartEnabled();
+  } catch (e) {
+    console.warn("Failed to check autostart status:", e);
+  }
+
+  await listen<boolean>("autostart-changed", (event) => {
+    appAutostart.value = event.payload;
+    cleanToast.value = event.payload
+      ? t.value.autostartEnabledToast
+      : t.value.autostartDisabledToast;
+    setTimeout(() => {
+      if (
+        cleanToast.value === t.value.autostartEnabledToast ||
+        cleanToast.value === t.value.autostartDisabledToast
+      ) {
+        cleanToast.value = "";
+      }
+    }, 3000);
+  });
 
   await listen<ProfileLogMessage>("profile-log-output", (event) => {
     const { profileId, text } = event.payload;
@@ -449,10 +510,22 @@ onMounted(async () => {
       </div>
 
       <div class="header-right">
-        <!-- Toast feedback for residual cleanup -->
+        <!-- Toast feedback for residual cleanup and autostart -->
         <div v-if="cleanToast" class="clean-toast">
           {{ cleanToast }}
         </div>
+
+        <!-- App Autostart Toggle -->
+        <button
+          type="button"
+          class="autostart-pill"
+          :class="{ active: appAutostart, loading: autostartLoading }"
+          :title="t.autostartAppTooltip"
+          @click="toggleAppAutostart"
+        >
+          <span class="autostart-dot"></span>
+          <span>{{ t.autostartApp }}</span>
+        </button>
 
         <div class="running-count-pill" :class="{ active: runningCount > 0 }">
           <span class="count-dot"></span>
@@ -1059,6 +1132,58 @@ onMounted(async () => {
 @keyframes fadeIn {
   from { opacity: 0; transform: translateY(-2px); }
   to { opacity: 1; transform: translateY(0); }
+}
+
+.autostart-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 10px;
+  border-radius: 9999px;
+  background: #f4efe6;
+  border: 1px solid #e5dfd3;
+  color: #7c7468;
+  font-size: 11px;
+  font-weight: 450;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  user-select: none;
+  font-family: inherit;
+  line-height: 1.2;
+}
+
+.autostart-pill:hover {
+  background: #eae3d6;
+  color: #2b2724;
+  border-color: #d6cebf;
+}
+
+.autostart-pill.active {
+  background: #e8f5e9;
+  border-color: #c8e6c9;
+  color: #2e7d32;
+}
+
+.autostart-pill.active:hover {
+  background: #dcf0de;
+  border-color: #b7deb8;
+}
+
+.autostart-pill.loading {
+  opacity: 0.6;
+  cursor: wait;
+}
+
+.autostart-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #a89f91;
+  transition: background 0.15s ease;
+}
+
+.autostart-pill.active .autostart-dot {
+  background: #2e7d32;
 }
 
 .running-count-pill {
