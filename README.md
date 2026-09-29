@@ -7,8 +7,8 @@
 **跨平台轻量级 AI Agent 与本地服务进程管理桌面应用**  
 *A modern, lightweight cross-platform desktop process manager for AI Agents & developer services.*
 
-[![CI](https://github.com/XRSec/Pi-Web-Launcher/actions/workflows/ci.yml/badge.svg)](https://github.com/XRSec/Pi-Web-Launcher/actions/workflows/ci.yml)
-[![Release](https://github.com/XRSec/Pi-Web-Launcher/actions/workflows/release.yml/badge.svg)](https://github.com/XRSec/Pi-Web-Launcher/actions/workflows/release.yml)
+[![CI](https://github.com/XRSec/AI-Agent-Launcher/actions/workflows/ci.yml/badge.svg)](https://github.com/XRSec/AI-Agent-Launcher/actions/workflows/ci.yml)
+[![Release](https://github.com/XRSec/AI-Agent-Launcher/actions/workflows/release.yml/badge.svg)](https://github.com/XRSec/AI-Agent-Launcher/actions/workflows/release.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Tauri v2](https://img.shields.io/badge/Tauri-v2-24C8D8?logo=tauri&logoColor=white)](https://tauri.app)
 [![Vue 3](https://img.shields.io/badge/Vue-3.5-4FC08D?logo=vuedotjs&logoColor=white)](https://vuejs.org)
