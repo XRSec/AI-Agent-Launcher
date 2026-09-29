@@ -80,6 +80,13 @@ pub async fn stop_all_agents_command(app: AppHandle) -> Result<(), String> {
 }
 
 #[tauri::command]
+pub async fn exit_app(app: AppHandle) -> Result<(), String> {
+    let _ = stop_all_agents(&app).await;
+    app.exit(0);
+    Ok(())
+}
+
+#[tauri::command]
 pub async fn get_profile_status(app: AppHandle, profile_id: String) -> Result<ProfileStatus, String> {
     let state = app.state::<AppState>();
     Ok(state.get_profile_status(&profile_id).await)

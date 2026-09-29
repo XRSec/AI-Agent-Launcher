@@ -1,9 +1,13 @@
 use tauri::{
-    menu::{MenuBuilder, SubmenuBuilder},
+    menu::{MenuBuilder, MenuItemBuilder, SubmenuBuilder},
     AppHandle,
 };
 
 pub fn setup_app_menu(app: &AppHandle) -> Result<(), Box<dyn std::error::Error>> {
+    let quit_item = MenuItemBuilder::with_id("app_quit", "退出 AI Agent Launcher")
+        .accelerator("CmdOrCtrl+Q")
+        .build(app)?;
+
     // 1. Main App Submenu (macOS AI Agent Launcher 主菜单)
     let app_submenu = SubmenuBuilder::new(app, "AI Agent Launcher")
         .about(None)
@@ -14,7 +18,7 @@ pub fn setup_app_menu(app: &AppHandle) -> Result<(), Box<dyn std::error::Error>>
         .hide_others()
         .show_all()
         .separator()
-        .quit()
+        .item(&quit_item)
         .build()?;
 
     // 2. Edit Submenu (Crucial for clipboard and text input shortcuts Cmd+C, Cmd+V, Cmd+A)

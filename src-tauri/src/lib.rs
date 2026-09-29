@@ -10,6 +10,11 @@ use std::path::PathBuf;
 use tauri::{Manager, WindowEvent};
 use state::AppState;
 
+#[cfg(target_os = "windows")]
+extern "system" {
+    fn GetAsyncKeyState(vKey: i32) -> i16;
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -54,11 +59,39 @@ pub fn run() {
 
             Ok(())
         })
+        .on_menu_event(|app, event| {
+            if event.id().as_ref() == "app_quit" {
+                let app_clone = app.clone();
+                tauri::async_runtime::spawn(async move {
+                    let _ = runner::stop_all_agents(&app_clone).await;
+                    app_clone.exit(0);
+                });
+            }
+        })
         .on_window_event(|window, event| {
             if let WindowEvent::CloseRequested { api, .. } = event {
-                // Hide window instead of closing, so app stays in tray
-                let _ = window.hide();
-                api.prevent_close();
+                #[cfg(target_os = "windows")]
+                let is_alt_f4 = unsafe {
+                    // VK_MENU = 0x12 (Alt key), VK_F4 = 0x73 (F4 key)
+                    let alt_down = (GetAsyncKeyState(0x12) as u16 & 0x8000) != 0;
+                    let f4_down = (GetAsyncKeyState(0x73) as u16 & 0x8000) != 0;
+                    alt_down || f4_down
+                };
+                #[cfg(not(target_os = "windows"))]
+                let is_alt_f4 = false;
+
+                if is_alt_f4 {
+                    // User explicitly pressed Alt+F4 on Windows: gracefully stop agents & quit
+                    let app_handle = window.app_handle().clone();
+                    tauri::async_runtime::spawn(async move {
+                        let _ = runner::stop_all_agents(&app_handle).await;
+                        app_handle.exit(0);
+                    });
+                } else {
+                    // User clicked close button (X / red traffic light): hide to tray
+                    let _ = window.hide();
+                    api.prevent_close();
+                }
             }
         })
         .invoke_handler(tauri::generate_handler![
@@ -76,6 +109,7 @@ pub fn run() {
             commands::clear_profile_logs,
             commands::detect_path,
             commands::clean_residual_processes,
+            commands::exit_app,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

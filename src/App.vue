@@ -439,6 +439,16 @@ function scrollToBottom() {
 onMounted(async () => {
   await loadData();
 
+  window.addEventListener("keydown", async (e: KeyboardEvent) => {
+    if (
+      ((e.metaKey || e.ctrlKey) && (e.key === "q" || e.key === "Q")) ||
+      (e.altKey && e.key === "F4")
+    ) {
+      e.preventDefault();
+      await invoke("exit_app");
+    }
+  });
+
   try {
     appAutostart.value = await isAutostartEnabled();
   } catch (e) {
