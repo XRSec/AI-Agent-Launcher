@@ -1,6 +1,6 @@
 [package]
 name = "ai-agent-launcher"
-version = "1.0.7"
+version = "1.0.0"
 description = "AI Agent Launcher"
 authors = ["XRSec"]
 license = "MIT"

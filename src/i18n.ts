@@ -129,8 +129,10 @@ export const messages = {
     btnRemindLater: "稍后提醒",
     downloadingUpdate: "正在下载更新…",
     downloadProgress: (percent: number, cur: string, tot: string) => `下载中 ${percent}% (${cur} / ${tot})`,
-    downloadCompleteLaunching: "下载完成，正在启动安装程序并退出…",
+    downloadCompleteLaunching: "下载完成，正在自动覆盖并重启应用…",
     downloadFailed: "下载安装包失败",
+    installerBuilding: "安装包构建中，前往网页查看",
+    installerBuildingHint: "当前版本的全平台安装包正在 GitHub 云端打包生成中，稍等片刻完成后即可一键下载安装。",
   },
   "en-US": {
     appTitle: "AI Agent Launcher",
@@ -231,8 +233,10 @@ export const messages = {
     btnRemindLater: "Remind Later",
     downloadingUpdate: "Downloading update…",
     downloadProgress: (percent: number, cur: string, tot: string) => `Downloading ${percent}% (${cur} / ${tot})`,
-    downloadCompleteLaunching: "Download complete. Launching installer…",
+    downloadCompleteLaunching: "Download complete. Automatically updating and restarting…",
     downloadFailed: "Failed to download update",
+    installerBuilding: "Building, view in browser",
+    installerBuildingHint: "Installers are currently compiling on GitHub Actions. Once ready, direct in-app download will be available.",
   },
 };
 

@@ -407,16 +407,64 @@ pub async fn download_and_install(
 async fn launch_installer_and_exit(app: AppHandle, dest_path: PathBuf) -> Result<(), String> {
     #[cfg(target_os = "macos")]
     {
-        // On macOS: 'open <path.dmg>' mounts disk image and shows drag-to-Applications window
-        let res = std::process::Command::new("open")
-            .arg(&dest_path)
+        let pid = std::process::id();
+        let target_app = get_target_app_bundle();
+        let dmg_path_str = dest_path.to_string_lossy().to_string();
+        let target_app_str = target_app.to_string_lossy().to_string();
+
+        let script = r#"
+            PID="$1"
+            DMG="$2"
+            TARGET="$3"
+
+            # 1. Wait for current app PID to exit
+            while kill -0 "$PID" 2>/dev/null; do
+                sleep 0.1
+            done
+
+            # 2. Mount DMG headlessly without opening Finder
+            MOUNT_DIR=$(mktemp -d /tmp/ai_agent_launcher_mount.XXXXXX)
+            hdiutil attach "$DMG" -nobrowse -noautoopen -mountpoint "$MOUNT_DIR" -quiet
+
+            # 3. Find .app bundle inside mount directory
+            APP_SRC=$(find "$MOUNT_DIR" -maxdepth 1 -name "*.app" | head -n 1)
+
+            if [ -n "$APP_SRC" ] && [ -d "$APP_SRC" ]; then
+                # 4. Remove old version and copy new version
+                rm -rf "$TARGET"
+                cp -R "$APP_SRC" "$TARGET"
+
+                # 5. Clean up mount and temp DMG
+                hdiutil detach "$MOUNT_DIR" -force -quiet
+                rm -rf "$MOUNT_DIR"
+                rm -f "$DMG"
+
+                # 6. Relaunch the newly installed application
+                sleep 0.4
+                open -a "$TARGET" || open "$TARGET"
+            else
+                # Fallback to standard DMG open if structure differed
+                hdiutil detach "$MOUNT_DIR" -force -quiet
+                rm -rf "$MOUNT_DIR"
+                open "$DMG"
+            fi
+        "#;
+
+        let spawn_res = std::process::Command::new("sh")
+            .arg("-c")
+            .arg(script)
+            .arg("ai-agent-launcher-updater")
+            .arg(pid.to_string())
+            .arg(&dmg_path_str)
+            .arg(&target_app_str)
             .spawn();
 
-        if let Err(e) = res {
-            return Err(format!("启动 DMG 安装器失败: {}", e));
+        if let Err(e) = spawn_res {
+            let _ = std::process::Command::new("open").arg(&dest_path).spawn();
+            return Err(format!("启动自动更新脚本失败: {}", e));
         }
 
-        tokio::time::sleep(Duration::from_millis(600)).await;
+        tokio::time::sleep(Duration::from_millis(500)).await;
         app.exit(0);
         Ok(())
     }
@@ -463,6 +511,20 @@ async fn launch_installer_and_exit(app: AppHandle, dest_path: PathBuf) -> Result
     {
         Err("当前操作系统暂不支持自动运行安装程序".to_string())
     }
+}
+
+#[cfg(target_os = "macos")]
+fn get_target_app_bundle() -> PathBuf {
+    if let Ok(exe) = std::env::current_exe() {
+        let mut cur = exe.parent();
+        while let Some(dir) = cur {
+            if dir.extension().and_then(|e| e.to_str()) == Some("app") {
+                return dir.to_path_buf();
+            }
+            cur = dir.parent();
+        }
+    }
+    PathBuf::from("/Applications/AI Agent Launcher.app")
 }
 
 #[cfg(test)]
@@ -551,8 +613,8 @@ mod tests {
         println!("Update check result: {:?}", update_result);
         assert!(update_result.is_ok(), "Failed to check update: {:?}", update_result.err());
         let info = update_result.unwrap();
-        assert_eq!(info.latest_version, "1.0.6");
         assert!(info.has_update);
         assert!(info.asset_download_url.is_some());
+        assert!(is_newer_version(&info.latest_version, &info.current_version));
     }
 }
