@@ -121,3 +121,17 @@ pub async fn detect_path(app: AppHandle) -> Result<String, String> {
 pub async fn clean_residual_processes(app: AppHandle, profile_id: String) -> Result<String, String> {
     crate::runner::clean_residual_for_profile(&app, &profile_id).await
 }
+
+#[tauri::command]
+pub async fn check_app_update() -> Result<crate::updater::UpdateInfo, String> {
+    crate::updater::check_github_update().await
+}
+
+#[tauri::command]
+pub async fn download_and_install_update(
+    app: AppHandle,
+    download_url: String,
+    file_name: String,
+) -> Result<(), String> {
+    crate::updater::download_and_install(app, download_url, file_name).await
+}

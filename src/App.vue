@@ -3,13 +3,21 @@ import { ref, computed, onMounted, nextTick, watch } from "vue";
 import { invoke } from "@tauri-apps/api/core";
 import { emit, listen } from "@tauri-apps/api/event";
 import { open } from "@tauri-apps/plugin-dialog";
+import { openUrl } from "@tauri-apps/plugin-opener";
 import {
   enable as enableAutostart,
   disable as disableAutostart,
   isEnabled as isAutostartEnabled,
 } from "@tauri-apps/plugin-autostart";
-import type { AgentProfile, ProfileStatus, ProfileLogMessage, RestartPolicy } from "./types";
-import { languageSetting, setLanguageSetting, t, type LanguageSetting } from "./i18n";
+import type {
+  AgentProfile,
+  ProfileStatus,
+  ProfileLogMessage,
+  RestartPolicy,
+  UpdateInfo,
+  DownloadProgressPayload,
+} from "./types";
+import { languageSetting, setLanguageSetting, t, currentLocale, type LanguageSetting } from "./i18n";
 
 const profiles = ref<AgentProfile[]>([]);
 const selectedProfileId = ref<string>("");
@@ -24,6 +32,17 @@ const appAutostart = ref(false);
 const autostartLoading = ref(false);
 
 const runningSnapshots = ref<Record<string, AgentProfile>>({});
+
+// Updater states
+const updateInfo = ref<UpdateInfo | null>(null);
+const isCheckingUpdate = ref(false);
+const isUpdateModalOpen = ref(false);
+const isDownloadingUpdate = ref(false);
+const downloadPercent = ref(0);
+const downloadedStr = ref("");
+const totalStr = ref("");
+const downloadStatusText = ref("");
+const downloadError = ref("");
 
 // Drag resizer states
 const sidebarWidth = ref<number>(
@@ -648,6 +667,79 @@ function closeLogSearch() {
   isLogSearchOpen.value = false;
 }
 
+function formatBytes(bytes?: number | null) {
+  if (!bytes || bytes <= 0) return "";
+  const mb = (bytes / (1024 * 1024)).toFixed(1);
+  return `${mb} MB`;
+}
+
+function formatDate(dateStr?: string) {
+  if (!dateStr) return "";
+  try {
+    const d = new Date(dateStr);
+    return d.toLocaleDateString(currentLocale.value === "zh-CN" ? "zh-CN" : "en-US", {
+      year: "numeric",
+      month: "short",
+      day: "numeric",
+    });
+  } catch {
+    return dateStr;
+  }
+}
+
+async function checkUpdate(silent = true) {
+  if (isCheckingUpdate.value) return;
+  isCheckingUpdate.value = true;
+  try {
+    const res = await invoke<UpdateInfo>("check_app_update");
+    updateInfo.value = res;
+    if (res.has_update) {
+      isUpdateModalOpen.value = true;
+    } else if (!silent) {
+      cleanToast.value = t.value.alreadyLatest;
+      setTimeout(() => {
+        if (cleanToast.value === t.value.alreadyLatest) cleanToast.value = "";
+      }, 3000);
+    }
+  } catch (err: any) {
+    if (!silent) {
+      cleanToast.value = `${t.value.updateCheckFailed}: ${err}`;
+      setTimeout(() => {
+        cleanToast.value = "";
+      }, 4000);
+    }
+  } finally {
+    isCheckingUpdate.value = false;
+  }
+}
+
+async function startDownloadUpdate() {
+  if (!updateInfo.value?.asset_download_url || isDownloadingUpdate.value) return;
+  isDownloadingUpdate.value = true;
+  downloadPercent.value = 0;
+  downloadError.value = "";
+  downloadStatusText.value = t.value.downloadingUpdate;
+
+  try {
+    await invoke("download_and_install_update", {
+      downloadUrl: updateInfo.value.asset_download_url,
+      fileName: updateInfo.value.asset_name || "ai-agent-launcher-update",
+    });
+    downloadStatusText.value = t.value.downloadCompleteLaunching;
+  } catch (err: any) {
+    isDownloadingUpdate.value = false;
+    downloadError.value = `${t.value.downloadFailed}: ${err}`;
+  }
+}
+
+async function openBrowserDownload() {
+  if (updateInfo.value?.asset_download_url) {
+    await openUrl(updateInfo.value.asset_download_url);
+  } else if (updateInfo.value?.release_url) {
+    await openUrl(updateInfo.value.release_url);
+  }
+}
+
 onMounted(async () => {
   await loadData();
 
@@ -742,6 +834,27 @@ onMounted(async () => {
       setLanguageSetting(event.payload as LanguageSetting);
     }
   });
+
+  // Listen for native app menu "Check for updates..."
+  await listen("menu-check-update", () => {
+    checkUpdate(false);
+  });
+
+  // Listen for update download progress
+  await listen<DownloadProgressPayload>("update-download-progress", (event) => {
+    const { downloaded, total, percent } = event.payload;
+    downloadPercent.value = percent;
+    const curMB = (downloaded / (1024 * 1024)).toFixed(1) + " MB";
+    const totMB = total > 0 ? (total / (1024 * 1024)).toFixed(1) + " MB" : "--";
+    downloadedStr.value = curMB;
+    totalStr.value = totMB;
+    downloadStatusText.value = t.value.downloadProgress(percent, curMB, totMB);
+  });
+
+  // Silent update check on startup (after 2.5s)
+  setTimeout(() => {
+    checkUpdate(true);
+  }, 2500);
 });
 </script>
 
@@ -756,6 +869,18 @@ onMounted(async () => {
         <div class="brand-text">
           <h1 class="app-title">{{ t.appTitle }}</h1>
           <span class="app-version">v1.0.0</span>
+          <!-- Update Available Badge -->
+          <button
+            v-if="updateInfo && updateInfo.has_update"
+            type="button"
+            class="update-badge-pill"
+            :title="t.updateAvailable"
+            @click="isUpdateModalOpen = true"
+          >
+            <span class="update-ping-circle"></span>
+            <span class="update-emoji">🚀</span>
+            <span class="update-badge-text">{{ t.updateAvailableBadge(updateInfo.latest_version) }}</span>
+          </button>
         </div>
       </div>
 
@@ -764,6 +889,19 @@ onMounted(async () => {
         <div v-if="cleanToast" class="clean-toast">
           {{ cleanToast }}
         </div>
+
+        <!-- Manual Check for Updates Button -->
+        <button
+          type="button"
+          class="header-icon-btn"
+          :class="{ 'is-spinning': isCheckingUpdate }"
+          :title="t.checkUpdate"
+          @click="() => checkUpdate(false)"
+        >
+          <svg class="header-icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+          </svg>
+        </button>
 
         <!-- App Autostart Toggle -->
         <button
@@ -1380,6 +1518,138 @@ onMounted(async () => {
         </section>
       </main>
     </div>
+
+    <!-- Version Update Modal Dialog -->
+    <Transition name="update-modal">
+      <div
+        v-if="isUpdateModalOpen && updateInfo"
+        class="update-modal-backdrop"
+        @click.self="!isDownloadingUpdate && (isUpdateModalOpen = false)"
+      >
+        <div class="update-modal-card">
+          <!-- Modal Header -->
+          <div class="update-modal-header">
+            <div class="update-header-info">
+              <span class="update-rocket-badge">🚀</span>
+              <div>
+                <h3 class="update-modal-title">{{ t.newVersionTitle }}</h3>
+                <p class="update-modal-subtitle">
+                  {{ updateInfo.release_name || `AI Agent Launcher v${updateInfo.latest_version}` }}
+                </p>
+              </div>
+            </div>
+            <button
+              v-if="!isDownloadingUpdate"
+              type="button"
+              class="update-modal-close"
+              :title="t.closeSearch"
+              @click="isUpdateModalOpen = false"
+            >
+              <svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" stroke-width="2.2" fill="none">
+                <line x1="18" y1="6" x2="6" y2="18" />
+                <line x1="6" y1="6" x2="18" y2="18" />
+              </svg>
+            </button>
+          </div>
+
+          <!-- Modal Body -->
+          <div class="update-modal-body">
+            <!-- Version Comparison Banner -->
+            <div class="update-version-row">
+              <div class="version-chip current">
+                <span class="chip-label">{{ t.currentVersionLabel }}</span>
+                <span class="chip-val">v{{ updateInfo.current_version }}</span>
+              </div>
+              <div class="version-arrow">➜</div>
+              <div class="version-chip latest">
+                <span class="chip-label">{{ t.latestVersionLabel }}</span>
+                <span class="chip-val">v{{ updateInfo.latest_version }}</span>
+              </div>
+              <div v-if="updateInfo.published_at" class="update-date-badge">
+                {{ formatDate(updateInfo.published_at) }}
+              </div>
+            </div>
+
+            <!-- Matched Asset Tag -->
+            <div v-if="updateInfo.asset_name" class="update-asset-pill">
+              <svg viewBox="0 0 24 24" width="13" height="13" stroke="currentColor" stroke-width="2" fill="none">
+                <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/>
+                <polyline points="3.27 6.96 12 12.01 20.73 6.96"/>
+                <line x1="12" y1="22.08" x2="12" y2="12"/>
+              </svg>
+              <span class="asset-name">{{ updateInfo.asset_name }}</span>
+              <span v-if="updateInfo.asset_size" class="asset-size">{{ formatBytes(updateInfo.asset_size) }}</span>
+            </div>
+
+            <!-- Release Notes Card -->
+            <div class="update-notes-card">
+              <div class="notes-header">{{ t.releaseNotesLabel }}</div>
+              <div class="notes-content">
+                {{ updateInfo.release_notes || "暂无特别说明 / No release notes provided." }}
+              </div>
+            </div>
+
+            <!-- Download Progress Display -->
+            <div v-if="isDownloadingUpdate" class="update-download-box">
+              <div class="progress-bar-track">
+                <div class="progress-bar-fill" :style="{ width: `${downloadPercent}%` }"></div>
+              </div>
+              <div class="progress-info-row">
+                <span class="progress-text">{{ downloadStatusText }}</span>
+                <span class="progress-percent">{{ downloadPercent }}%</span>
+              </div>
+            </div>
+
+            <!-- Error Banner if any -->
+            <div v-if="downloadError" class="update-error-banner">
+              {{ downloadError }}
+            </div>
+          </div>
+
+          <!-- Modal Footer Actions -->
+          <div class="update-modal-footer">
+            <button
+              type="button"
+              class="update-action-btn secondary browser"
+              @click="openBrowserDownload"
+            >
+              <svg viewBox="0 0 24 24" width="13" height="13" stroke="currentColor" stroke-width="2" fill="none">
+                <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/>
+                <polyline points="15 3 21 3 21 9"/>
+                <line x1="10" y1="14" x2="21" y2="3"/>
+              </svg>
+              <span>{{ t.btnDownloadBrowser }}</span>
+            </button>
+
+            <div class="footer-right-actions">
+              <button
+                v-if="!isDownloadingUpdate"
+                type="button"
+                class="update-action-btn ghost"
+                @click="isUpdateModalOpen = false"
+              >
+                {{ t.btnRemindLater }}
+              </button>
+
+              <button
+                type="button"
+                class="update-action-btn primary"
+                :disabled="isDownloadingUpdate || !updateInfo.asset_download_url"
+                @click="startDownloadUpdate"
+              >
+                <span v-if="isDownloadingUpdate" class="btn-spinner"></span>
+                <svg v-else viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" stroke-width="2.2" fill="none">
+                  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                  <polyline points="7 10 12 15 17 10" />
+                  <line x1="12" y1="15" x2="12" y2="3" />
+                </svg>
+                <span>{{ isDownloadingUpdate ? t.downloadingUpdate : t.btnDownloadUpdate }}</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </Transition>
   </div>
 </template>
 
@@ -2806,5 +3076,459 @@ onMounted(async () => {
   border-color: #d97706;
   transform: translateY(-1px);
   box-shadow: 0 6px 16px rgba(0, 0, 0, 0.5);
+}
+/* Update Available Header Badge Pill */
+.update-badge-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  margin-left: 8px;
+  padding: 2px 9px 2px 7px;
+  border-radius: 9999px;
+  background: linear-gradient(135deg, rgba(245, 158, 11, 0.16), rgba(217, 119, 6, 0.22));
+  border: 1px solid rgba(245, 158, 11, 0.38);
+  color: #b45309;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  box-shadow: 0 1px 3px rgba(245, 158, 11, 0.15);
+  position: relative;
+  user-select: none;
+}
+
+.update-badge-pill:hover {
+  background: linear-gradient(135deg, rgba(245, 158, 11, 0.24), rgba(217, 119, 6, 0.32));
+  border-color: rgba(217, 119, 6, 0.6);
+  transform: translateY(-1px);
+  box-shadow: 0 3px 8px rgba(245, 158, 11, 0.25);
+}
+
+.update-ping-circle {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #f59e0b;
+  box-shadow: 0 0 0 0 rgba(245, 158, 11, 0.7);
+  animation: pulse-ping 2s cubic-bezier(0, 0, 0.2, 1) infinite;
+}
+
+@keyframes pulse-ping {
+  0% {
+    transform: scale(0.95);
+    box-shadow: 0 0 0 0 rgba(245, 158, 11, 0.7);
+  }
+  70% {
+    transform: scale(1);
+    box-shadow: 0 0 0 6px rgba(245, 158, 11, 0);
+  }
+  100% {
+    transform: scale(0.95);
+    box-shadow: 0 0 0 0 rgba(245, 158, 11, 0);
+  }
+}
+
+.update-emoji {
+  font-size: 11px;
+  line-height: 1;
+}
+
+.update-badge-text {
+  letter-spacing: -0.01em;
+}
+
+/* Header Action Icon Button */
+.header-icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 6px;
+  background: #ffffff;
+  border: 1px solid #e7e2d8;
+  color: #78716c;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.header-icon-btn:hover {
+  background: #fbf9f5;
+  border-color: #d6cfc4;
+  color: #2b2724;
+}
+
+.header-icon-svg {
+  width: 14px;
+  height: 14px;
+}
+
+.header-icon-btn.is-spinning .header-icon-svg {
+  animation: spin 1s linear infinite;
+  color: #d97706;
+}
+
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* Update Modal Backdrop & Card */
+.update-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  background: rgba(18, 16, 15, 0.65);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+}
+
+.update-modal-card {
+  width: 100%;
+  max-width: 520px;
+  background: #ffffff;
+  border: 1px solid #e7e2d8;
+  border-radius: 14px;
+  box-shadow: 0 20px 48px -12px rgba(0, 0, 0, 0.35), 0 0 1px rgba(0, 0, 0, 0.1);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  animation: modal-pop 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes modal-pop {
+  0% {
+    opacity: 0;
+    transform: scale(0.95) translateY(8px);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+.update-modal-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  padding: 18px 20px 14px 20px;
+  border-bottom: 1px solid #f3efe6;
+  background: #faf7f2;
+}
+
+.update-header-info {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.update-rocket-badge {
+  font-size: 26px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  border-radius: 10px;
+  background: rgba(245, 158, 11, 0.12);
+  border: 1px solid rgba(245, 158, 11, 0.25);
+}
+
+.update-modal-title {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 600;
+  color: #1c1917;
+  letter-spacing: -0.01em;
+}
+
+.update-modal-subtitle {
+  margin: 3px 0 0 0;
+  font-size: 12px;
+  color: #78716c;
+}
+
+.update-modal-close {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 6px;
+  background: transparent;
+  border: none;
+  color: #a8a29e;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.update-modal-close:hover {
+  background: #ede8df;
+  color: #1c1917;
+}
+
+.update-modal-body {
+  padding: 18px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  max-height: calc(80vh - 140px);
+  overflow-y: auto;
+}
+
+/* Version Comparison Row */
+.update-version-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  border-radius: 8px;
+  background: #fbf9f5;
+  border: 1px solid #eee8dc;
+}
+
+.version-chip {
+  display: flex;
+  flex-direction: column;
+}
+
+.version-chip .chip-label {
+  font-size: 10px;
+  color: #a8a29e;
+  text-transform: uppercase;
+  font-weight: 500;
+  letter-spacing: 0.04em;
+}
+
+.version-chip .chip-val {
+  font-size: 13px;
+  font-weight: 600;
+  color: #57534e;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+}
+
+.version-chip.latest .chip-val {
+  color: #d97706;
+}
+
+.version-arrow {
+  color: #d6cfc4;
+  font-size: 13px;
+}
+
+.update-date-badge {
+  margin-left: auto;
+  font-size: 11px;
+  color: #a8a29e;
+}
+
+/* Matched Asset Pill */
+.update-asset-pill {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 12px;
+  border-radius: 6px;
+  background: #f5f2eb;
+  border: 1px solid #e7e2d8;
+  color: #57534e;
+  font-size: 11.5px;
+}
+
+.update-asset-pill .asset-name {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-weight: 500;
+  color: #2b2724;
+  word-break: break-all;
+}
+
+.update-asset-pill .asset-size {
+  margin-left: auto;
+  font-size: 11px;
+  color: #78716c;
+  background: #ffffff;
+  padding: 1px 6px;
+  border-radius: 4px;
+  border: 1px solid #e2ddd3;
+}
+
+/* Notes Card */
+.update-notes-card {
+  border-radius: 8px;
+  border: 1px solid #e7e2d8;
+  background: #faf7f2;
+  overflow: hidden;
+}
+
+.notes-header {
+  padding: 8px 12px;
+  background: #f3efe6;
+  font-size: 11px;
+  font-weight: 600;
+  color: #57534e;
+  border-bottom: 1px solid #e7e2d8;
+}
+
+.notes-content {
+  padding: 12px;
+  font-size: 12.5px;
+  line-height: 1.6;
+  color: #3f3b37;
+  max-height: 180px;
+  overflow-y: auto;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+/* Download Progress Box */
+.update-download-box {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px;
+  border-radius: 8px;
+  background: #fbf9f5;
+  border: 1px solid #ebd9b8;
+}
+
+.progress-bar-track {
+  height: 8px;
+  border-radius: 9999px;
+  background: #e7e2d8;
+  overflow: hidden;
+}
+
+.progress-bar-fill {
+  height: 100%;
+  border-radius: 9999px;
+  background: linear-gradient(90deg, #f59e0b, #d97706);
+  transition: width 0.2s ease;
+  box-shadow: 0 0 8px rgba(245, 158, 11, 0.4);
+}
+
+.progress-info-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 11.5px;
+}
+
+.progress-text {
+  color: #78716c;
+}
+
+.progress-percent {
+  font-weight: 600;
+  color: #d97706;
+  font-family: ui-monospace, SFMono-Regular, monospace;
+}
+
+/* Error Banner */
+.update-error-banner {
+  padding: 8px 12px;
+  border-radius: 6px;
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+  color: #dc2626;
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+/* Modal Footer Actions */
+.update-modal-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 20px;
+  border-top: 1px solid #f3efe6;
+  background: #faf7f2;
+}
+
+.footer-right-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.update-action-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 7px 14px;
+  border-radius: 7px;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  user-select: none;
+}
+
+.update-action-btn.secondary {
+  background: transparent;
+  border: 1px solid #d6cfc4;
+  color: #57534e;
+}
+
+.update-action-btn.secondary:hover {
+  background: #ede8df;
+  color: #1c1917;
+}
+
+.update-action-btn.ghost {
+  background: transparent;
+  border: 1px solid transparent;
+  color: #78716c;
+}
+
+.update-action-btn.ghost:hover {
+  background: #ede8df;
+  color: #1c1917;
+}
+
+.update-action-btn.primary {
+  background: linear-gradient(135deg, #2b2724, #1c1917);
+  border: 1px solid #1c1917;
+  color: #f7f4ee;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.18);
+}
+
+.update-action-btn.primary:hover:not(:disabled) {
+  background: linear-gradient(135deg, #3f3b37, #2b2724);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.25);
+}
+
+.update-action-btn.primary:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.btn-spinner {
+  width: 13px;
+  height: 13px;
+  border: 2px solid rgba(255, 255, 255, 0.3);
+  border-top-color: #ffffff;
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+/* Modal Transition */
+.update-modal-enter-active,
+.update-modal-leave-active {
+  transition: opacity 0.2s ease;
+}
+
+.update-modal-enter-from,
+.update-modal-leave-to {
+  opacity: 0;
 }
 </style>

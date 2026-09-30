@@ -5,6 +5,7 @@ pub mod path_detect;
 pub mod runner;
 pub mod state;
 pub mod tray;
+pub mod updater;
 
 use std::path::PathBuf;
 use tauri::{Manager, WindowEvent};
@@ -66,6 +67,9 @@ pub fn run() {
                     let _ = runner::stop_all_agents(&app_clone).await;
                     app_clone.exit(0);
                 });
+            } else if event.id().as_ref() == "menu_check_update" {
+                use tauri::Emitter;
+                let _ = app.emit("menu-check-update", ());
             }
         })
         .on_window_event(|window, event| {
@@ -112,6 +116,8 @@ pub fn run() {
             commands::detect_path,
             commands::clean_residual_processes,
             commands::exit_app,
+            commands::check_app_update,
+            commands::download_and_install_update,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
