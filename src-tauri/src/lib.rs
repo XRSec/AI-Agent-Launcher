@@ -70,6 +70,9 @@ pub fn run() {
             } else if event.id().as_ref() == "menu_check_update" {
                 use tauri::Emitter;
                 let _ = app.emit("menu-check-update", ());
+            } else if event.id().as_ref() == "menu_about" {
+                use tauri::Emitter;
+                let _ = app.emit("menu-open-about", ());
             }
         })
         .on_window_event(|window, event| {

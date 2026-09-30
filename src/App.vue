@@ -39,6 +39,7 @@ const currentAppVersion = ref("1.0.0");
 const updateInfo = ref<UpdateInfo | null>(null);
 const isCheckingUpdate = ref(false);
 const isUpdateModalOpen = ref(false);
+const isAboutModalOpen = ref(false);
 const isDownloadingUpdate = ref(false);
 const downloadPercent = ref(0);
 const downloadedStr = ref("");
@@ -850,6 +851,11 @@ onMounted(async () => {
     checkUpdate(false);
   });
 
+  // Listen for native app menu "About AI Agent Launcher"
+  await listen("menu-open-about", () => {
+    isAboutModalOpen.value = true;
+  });
+
   // Listen for update download progress
   await listen<DownloadProgressPayload>("update-download-progress", (event) => {
     const { downloaded, total, percent } = event.payload;
@@ -873,12 +879,12 @@ onMounted(async () => {
     <!-- Top Header (Layer 0 Surface) -->
     <header class="app-header">
       <div class="header-left">
-        <div class="brand-box">
+        <div class="brand-box is-clickable" :title="t.aboutTitle" @click="isAboutModalOpen = true">
           <img src="/app-icon.svg" alt="App Logo" class="brand-logo-img" />
         </div>
         <div class="brand-text">
-          <h1 class="app-title">{{ t.appTitle }}</h1>
-          <span class="app-version">v{{ currentAppVersion }}</span>
+          <h1 class="app-title is-clickable" :title="t.aboutTitle" @click="isAboutModalOpen = true">{{ t.appTitle }}</h1>
+          <span class="app-version is-clickable" :title="t.aboutTitle" @click="isAboutModalOpen = true">v{{ currentAppVersion }}</span>
           <!-- Update Available Badge -->
           <button
             v-if="updateInfo && updateInfo.has_update"
@@ -899,6 +905,20 @@ onMounted(async () => {
         <div v-if="cleanToast" class="clean-toast">
           {{ cleanToast }}
         </div>
+
+        <!-- About Button -->
+        <button
+          type="button"
+          class="header-icon-btn"
+          :title="t.aboutTitle"
+          @click="isAboutModalOpen = true"
+        >
+          <svg class="header-icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="12" cy="12" r="10" />
+            <line x1="12" y1="16" x2="12" y2="12" />
+            <line x1="12" y1="8" x2="12.01" y2="8" />
+          </svg>
+        </button>
 
         <!-- Manual Check for Updates Button -->
         <button
@@ -1674,6 +1694,126 @@ onMounted(async () => {
                 </span>
               </button>
             </div>
+          </div>
+        </div>
+      </div>
+    </Transition>
+
+    <!-- About Modal Dialog -->
+    <Transition name="update-modal">
+      <div
+        v-if="isAboutModalOpen"
+        class="update-modal-backdrop"
+        @click.self="isAboutModalOpen = false"
+      >
+        <div class="about-modal-card">
+          <!-- Modal Header -->
+          <div class="about-modal-header">
+            <div class="about-header-brand">
+              <img src="/app-icon.svg" alt="App Logo" class="about-app-logo" />
+              <div class="about-header-titles">
+                <div class="about-title-row">
+                  <h3 class="about-app-name">{{ t.appTitle }}</h3>
+                  <span class="about-version-badge">v{{ currentAppVersion }}</span>
+                </div>
+                <p class="about-app-subtitle">{{ t.aboutSubtitle }}</p>
+              </div>
+            </div>
+            <button
+              type="button"
+              class="update-modal-close"
+              :title="t.closeBtn"
+              @click="isAboutModalOpen = false"
+            >
+              <svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" stroke-width="2.2" fill="none">
+                <line x1="18" y1="6" x2="6" y2="18" />
+                <line x1="6" y1="6" x2="18" y2="18" />
+              </svg>
+            </button>
+          </div>
+
+          <!-- Modal Body -->
+          <div class="about-modal-body">
+            <!-- Author Card -->
+            <div class="about-author-card">
+              <div class="author-left">
+                <img src="/xrsec-logo.png" alt="XRSec Logo" class="author-avatar-img" />
+                <div class="author-info">
+                  <div class="author-name-row">
+                    <span class="author-name">XRSec</span>
+                    <span class="author-badge">Author</span>
+                  </div>
+                  <span class="author-desc">Cyber Security & AI Tooling</span>
+                </div>
+              </div>
+              <button
+                type="button"
+                class="author-github-link"
+                :title="t.githubProfileLabel"
+                @click="openUrl('https://github.com/XRSec')"
+              >
+                <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor">
+                  <path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0 0 24 12c0-6.63-5.37-12-12-12z"/>
+                </svg>
+                <span>@XRSec</span>
+              </button>
+            </div>
+
+            <!-- Description -->
+            <div class="about-desc-card">
+              <p class="about-desc-text">{{ t.aboutDesc }}</p>
+            </div>
+
+            <!-- Links & Metadata -->
+            <div class="about-info-grid">
+              <div class="about-info-item full" @click="openUrl('https://github.com/XRSec/AI-Agent-Launcher')">
+                <span class="info-label">{{ t.githubRepoLabel }}</span>
+                <div class="info-val-link">
+                  <svg viewBox="0 0 24 24" width="13" height="13" fill="currentColor">
+                    <path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0 0 24 12c0-6.63-5.37-12-12-12z"/>
+                  </svg>
+                  <span>XRSec / AI-Agent-Launcher</span>
+                  <svg viewBox="0 0 24 24" width="11" height="11" stroke="currentColor" stroke-width="2" fill="none">
+                    <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/>
+                    <polyline points="15 3 21 3 21 9"/>
+                    <line x1="10" y1="14" x2="21" y2="3"/>
+                  </svg>
+                </div>
+              </div>
+
+              <div class="about-info-item">
+                <span class="info-label">{{ t.licenseLabel }}</span>
+                <span class="info-val">{{ t.licenseValue }}</span>
+              </div>
+
+              <div class="about-info-item">
+                <span class="info-label">{{ t.architectureLabel }}</span>
+                <span class="info-val">Tauri 2 · Rust · Vue 3</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Modal Footer -->
+          <div class="about-modal-footer">
+            <button
+              type="button"
+              class="about-action-btn secondary"
+              :class="{ 'is-spinning': isCheckingUpdate }"
+              @click="() => checkUpdate(false)"
+            >
+              <svg class="header-icon-svg" viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+              </svg>
+              <span>{{ t.checkUpdateNow }}</span>
+            </button>
+
+            <button
+              type="button"
+              class="about-action-btn primary"
+              @click="isAboutModalOpen = false"
+            >
+              {{ t.closeBtn }}
+            </button>
           </div>
         </div>
       </div>
@@ -3565,6 +3705,282 @@ onMounted(async () => {
 .update-building-notice .building-icon {
   font-size: 14px;
   flex-shrink: 0;
+}
+
+/* About Modal Card & Components */
+.about-modal-card {
+  width: 100%;
+  max-width: 480px;
+  background: #ffffff;
+  border: 1px solid #e7e2d8;
+  border-radius: 14px;
+  box-shadow: 0 20px 48px -12px rgba(0, 0, 0, 0.35), 0 0 1px rgba(0, 0, 0, 0.1);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  animation: modal-pop 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.about-modal-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  padding: 18px 20px 14px 20px;
+  border-bottom: 1px solid #f3efe6;
+  background: #faf7f2;
+}
+
+.about-header-brand {
+  display: flex;
+  align-items: center;
+  gap: 13px;
+}
+
+.about-app-logo {
+  width: 46px;
+  height: 46px;
+  border-radius: 11px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12);
+  flex-shrink: 0;
+}
+
+.about-header-titles {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.about-title-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.about-app-name {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 700;
+  color: #1c1917;
+  letter-spacing: -0.01em;
+}
+
+.about-version-badge {
+  font-size: 11px;
+  font-weight: 600;
+  color: #b45309;
+  background: rgba(245, 158, 11, 0.12);
+  border: 1px solid rgba(245, 158, 11, 0.3);
+  padding: 1px 7px;
+  border-radius: 6px;
+}
+
+.about-app-subtitle {
+  margin: 2px 0 0 0;
+  font-size: 11.5px;
+  color: #78716c;
+  line-height: 1.4;
+}
+
+.about-modal-body {
+  padding: 16px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  background: #ffffff;
+}
+
+.about-author-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 11px 14px;
+  background: #faf8f5;
+  border: 1px solid #efeae0;
+  border-radius: 10px;
+}
+
+.author-left {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+}
+
+.author-avatar-img {
+  width: 38px;
+  height: 38px;
+  border-radius: 8px;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.08);
+  flex-shrink: 0;
+}
+
+.author-info {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.author-name-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.author-name {
+  font-size: 13.5px;
+  font-weight: 600;
+  color: #1c1917;
+}
+
+.author-badge {
+  font-size: 10px;
+  font-weight: 600;
+  color: #d97706;
+  background: rgba(217, 119, 6, 0.12);
+  padding: 0 5px;
+  border-radius: 4px;
+}
+
+.author-desc {
+  font-size: 11px;
+  color: #78716c;
+}
+
+.author-github-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 500;
+  color: #2b2724;
+  background: #ffffff;
+  border: 1px solid #dcd5c9;
+  padding: 5px 11px;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.author-github-link:hover {
+  background: #f5f2eb;
+  border-color: #2b2724;
+  color: #000000;
+}
+
+.about-desc-card {
+  padding: 12px 14px;
+  background: #faf8f5;
+  border: 1px solid #efeae0;
+  border-radius: 10px;
+}
+
+.about-desc-text {
+  margin: 0;
+  font-size: 11.5px;
+  line-height: 1.6;
+  color: #57534e;
+}
+
+.about-info-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 9px;
+}
+
+.about-info-item {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 9px 12px;
+  background: #faf8f5;
+  border: 1px solid #efeae0;
+  border-radius: 8px;
+}
+
+.about-info-item.full {
+  grid-column: 1 / -1;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.about-info-item.full:hover {
+  background: #f5f0e6;
+  border-color: #dcd5c9;
+}
+
+.info-label {
+  font-size: 10.5px;
+  color: #a8a29e;
+  font-weight: 500;
+}
+
+.info-val {
+  font-size: 11.5px;
+  color: #292524;
+  font-weight: 500;
+}
+
+.info-val-link {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: #1c1917;
+  font-weight: 600;
+}
+
+.about-modal-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 13px 20px;
+  border-top: 1px solid #f3efe6;
+  background: #faf7f2;
+}
+
+.about-action-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12.5px;
+  font-weight: 500;
+  padding: 6px 14px;
+  border-radius: 7px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.about-action-btn.secondary {
+  background: #ffffff;
+  border: 1px solid #dcd5c9;
+  color: #44403c;
+}
+
+.about-action-btn.secondary:hover {
+  background: #f5f2eb;
+  color: #1c1917;
+}
+
+.about-action-btn.primary {
+  background: #2b2724;
+  border: 1px solid #2b2724;
+  color: #ffffff;
+}
+
+.about-action-btn.primary:hover {
+  background: #1c1917;
+}
+
+.brand-box.is-clickable,
+.app-title.is-clickable,
+.app-version.is-clickable {
+  cursor: pointer;
+  transition: opacity 0.15s ease;
+}
+
+.brand-box.is-clickable:hover,
+.app-title.is-clickable:hover,
+.app-version.is-clickable:hover {
+  opacity: 0.8;
 }
 
 /* Modal Transition */

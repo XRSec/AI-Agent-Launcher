@@ -22,6 +22,7 @@ pub fn setup_tray(app: &AppHandle) -> Result<(), Box<dyn std::error::Error>> {
     let menu = MenuBuilder::new(app)
         .item(&MenuItemBuilder::with_id("show_window", "显示主窗口").build(app)?)
         .separator()
+        .item(&MenuItemBuilder::with_id("about", "关于 AI Agent Launcher").build(app)?)
         .item(&autostart_item)
         .separator()
         .item(&MenuItemBuilder::with_id("quit", "退出").build(app)?)
@@ -44,6 +45,16 @@ pub fn setup_tray(app: &AppHandle) -> Result<(), Box<dyn std::error::Error>> {
                         let _ = window.unminimize();
                         let _ = window.set_focus();
                     }
+                }
+                "about" => {
+                    #[cfg(target_os = "macos")]
+                    let _ = app.set_activation_policy(tauri::ActivationPolicy::Regular);
+                    if let Some(window) = app.get_webview_window("main") {
+                        let _ = window.show();
+                        let _ = window.unminimize();
+                        let _ = window.set_focus();
+                    }
+                    let _ = app.emit("menu-open-about", ());
                 }
                 "toggle_autostart" => {
                     let autolaunch = app.autolaunch();

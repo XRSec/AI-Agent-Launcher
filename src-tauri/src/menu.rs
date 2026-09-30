@@ -3,6 +3,9 @@ use tauri::{
     AppHandle,
 };
 pub fn setup_app_menu(app: &AppHandle) -> Result<(), Box<dyn std::error::Error>> {
+    let about_item = MenuItemBuilder::with_id("menu_about", "关于 AI Agent Launcher")
+        .build(app)?;
+
     let check_update_item = MenuItemBuilder::with_id("menu_check_update", "检查更新...")
         .build(app)?;
 
@@ -12,7 +15,7 @@ pub fn setup_app_menu(app: &AppHandle) -> Result<(), Box<dyn std::error::Error>>
 
     // 1. Main App Submenu (macOS AI Agent Launcher 主菜单)
     let app_submenu = SubmenuBuilder::new(app, "AI Agent Launcher")
-        .about(None)
+        .item(&about_item)
         .item(&check_update_item)
         .separator()
         .services()
