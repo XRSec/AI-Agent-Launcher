@@ -4,6 +4,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { emit, listen } from "@tauri-apps/api/event";
 import { open } from "@tauri-apps/plugin-dialog";
 import { openUrl } from "@tauri-apps/plugin-opener";
+import { getVersion } from "@tauri-apps/api/app";
 import {
   enable as enableAutostart,
   disable as disableAutostart,
@@ -34,6 +35,7 @@ const autostartLoading = ref(false);
 const runningSnapshots = ref<Record<string, AgentProfile>>({});
 
 // Updater states
+const currentAppVersion = ref("1.0.0");
 const updateInfo = ref<UpdateInfo | null>(null);
 const isCheckingUpdate = ref(false);
 const isUpdateModalOpen = ref(false);
@@ -693,6 +695,9 @@ async function checkUpdate(silent = true) {
   try {
     const res = await invoke<UpdateInfo>("check_app_update");
     updateInfo.value = res;
+    if (res.current_version) {
+      currentAppVersion.value = res.current_version;
+    }
     if (res.has_update) {
       isUpdateModalOpen.value = true;
     } else if (!silent) {
@@ -741,6 +746,11 @@ async function openBrowserDownload() {
 }
 
 onMounted(async () => {
+  try {
+    currentAppVersion.value = await getVersion();
+  } catch (e) {
+    console.warn("Failed to get app version:", e);
+  }
   await loadData();
 
   window.addEventListener("keydown", async (e: KeyboardEvent) => {
@@ -868,7 +878,7 @@ onMounted(async () => {
         </div>
         <div class="brand-text">
           <h1 class="app-title">{{ t.appTitle }}</h1>
-          <span class="app-version">v1.0.0</span>
+          <span class="app-version">v{{ currentAppVersion }}</span>
           <!-- Update Available Badge -->
           <button
             v-if="updateInfo && updateInfo.has_update"
