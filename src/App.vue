@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, onMounted, nextTick } from "vue";
+import { ref, computed, onMounted, nextTick, watch } from "vue";
 import { invoke } from "@tauri-apps/api/core";
 import { emit, listen } from "@tauri-apps/api/event";
 import { open } from "@tauri-apps/plugin-dialog";
@@ -34,6 +34,20 @@ const logHeight = ref<number>(
 );
 const isDraggingSidebar = ref(false);
 const isDraggingLog = ref(false);
+const isLogMaximized = ref(false);
+const prevLogHeight = ref(220);
+
+function toggleMaximizeLog() {
+  if (!isLogMaximized.value) {
+    prevLogHeight.value = logHeight.value;
+    logHeight.value = Math.max(window.innerHeight - 120, 260);
+    isLogMaximized.value = true;
+  } else {
+    logHeight.value = prevLogHeight.value || 220;
+    isLogMaximized.value = false;
+  }
+  localStorage.setItem("launcher_log_height", String(logHeight.value));
+}
 
 function startResizeSidebar(e: MouseEvent) {
   isDraggingSidebar.value = true;
@@ -64,8 +78,11 @@ function startResizeLog(e: MouseEvent) {
 
   function onMouseMove(moveEvent: MouseEvent) {
     const delta = startY - moveEvent.clientY;
-    const newH = Math.min(Math.max(startH + delta, 90), 550);
+    // Allow dragging up to almost the full window height
+    const maxH = Math.max(window.innerHeight - 120, 260);
+    const newH = Math.min(Math.max(startH + delta, 80), maxH);
     logHeight.value = newH;
+    isLogMaximized.value = false;
     localStorage.setItem("launcher_log_height", String(newH));
   }
 
@@ -427,13 +444,208 @@ async function toggleAppAutostart() {
   }
 }
 
+const userScrolledUp = ref(false);
+
+function onLogScroll() {
+  if (!logContainer.value) return;
+  const { scrollTop, scrollHeight, clientHeight } = logContainer.value;
+  // If user is more than 35px from bottom, mark as scrolled up
+  const atBottom = scrollHeight - scrollTop - clientHeight <= 35;
+  userScrolledUp.value = !atBottom;
+}
+
 function scrollToBottom() {
-  if (!autoScroll.value) return;
+  if (!autoScroll.value || userScrolledUp.value) return;
   nextTick(() => {
     if (logContainer.value) {
       logContainer.value.scrollTop = logContainer.value.scrollHeight;
     }
   });
+}
+
+function jumpToBottom() {
+  userScrolledUp.value = false;
+  autoScroll.value = true;
+  nextTick(() => {
+    if (logContainer.value) {
+      logContainer.value.scrollTop = logContainer.value.scrollHeight;
+    }
+  });
+}
+
+watch(autoScroll, (val) => {
+  if (val) {
+    userScrolledUp.value = false;
+    scrollToBottom();
+  }
+});
+
+// Log Search States & Logic
+const isLogSearchOpen = ref(false);
+const logSearchQuery = ref("");
+const logSearchCaseSensitive = ref(false);
+const logSearchIndex = ref(0);
+const logSearchInput = ref<HTMLInputElement | null>(null);
+
+function escapeRegExp(string: string) {
+  return string.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+interface LogMatchItem {
+  lineIdx: number;
+  start: number;
+  end: number;
+  globalIndex: number;
+}
+
+const searchMatches = computed<LogMatchItem[]>(() => {
+  const query = logSearchQuery.value.trim();
+  if (!isLogSearchOpen.value || !query) return [];
+
+  const flags = logSearchCaseSensitive.value ? "g" : "gi";
+  let regex: RegExp;
+  try {
+    regex = new RegExp(escapeRegExp(query), flags);
+  } catch {
+    return [];
+  }
+
+  const results: LogMatchItem[] = [];
+  let count = 0;
+  const lines = currentLogs.value;
+
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+    let match: RegExpExecArray | null;
+    while ((match = regex.exec(line)) !== null) {
+      results.push({
+        lineIdx: i,
+        start: match.index,
+        end: match.index + match[0].length,
+        globalIndex: count++,
+      });
+      if (regex.lastIndex === match.index) {
+        regex.lastIndex++;
+      }
+    }
+  }
+
+  return results;
+});
+
+const lineMatchesMap = computed(() => {
+  const map = new Map<number, LogMatchItem[]>();
+  for (const item of searchMatches.value) {
+    let list = map.get(item.lineIdx);
+    if (!list) {
+      list = [];
+      map.set(item.lineIdx, list);
+    }
+    list.push(item);
+  }
+  return map;
+});
+
+interface LinePart {
+  text: string;
+  isMatch: boolean;
+  isActive: boolean;
+}
+
+function getLineParts(line: string, lineIdx: number): LinePart[] {
+  if (!isLogSearchOpen.value || !logSearchQuery.value.trim()) {
+    return [{ text: line, isMatch: false, isActive: false }];
+  }
+
+  const matches = lineMatchesMap.value.get(lineIdx);
+  if (!matches || matches.length === 0) {
+    return [{ text: line, isMatch: false, isActive: false }];
+  }
+
+  const parts: LinePart[] = [];
+  let lastIdx = 0;
+  const currentActive = logSearchIndex.value;
+
+  for (const m of matches) {
+    if (m.start > lastIdx) {
+      parts.push({
+        text: line.slice(lastIdx, m.start),
+        isMatch: false,
+        isActive: false,
+      });
+    }
+    parts.push({
+      text: line.slice(m.start, m.end),
+      isMatch: true,
+      isActive: m.globalIndex === currentActive,
+    });
+    lastIdx = m.end;
+  }
+
+  if (lastIdx < line.length) {
+    parts.push({
+      text: line.slice(lastIdx),
+      isMatch: false,
+      isActive: false,
+    });
+  }
+
+  return parts;
+}
+
+watch(logSearchQuery, () => {
+  logSearchIndex.value = 0;
+  if (searchMatches.value.length > 0) {
+    scrollToCurrentMatch();
+  }
+});
+
+watch(logSearchCaseSensitive, () => {
+  logSearchIndex.value = 0;
+  if (searchMatches.value.length > 0) {
+    scrollToCurrentMatch();
+  }
+});
+
+function scrollToCurrentMatch() {
+  if (searchMatches.value.length === 0) return;
+  const match = searchMatches.value[logSearchIndex.value];
+  if (!match || !logContainer.value) return;
+
+  nextTick(() => {
+    const el = logContainer.value?.querySelector(`[data-line-idx="${match.lineIdx}"]`) as HTMLElement | null;
+    if (el) {
+      el.scrollIntoView({ block: "center", behavior: "smooth" });
+    }
+  });
+}
+
+function nextLogSearchMatch() {
+  if (searchMatches.value.length === 0) return;
+  logSearchIndex.value = (logSearchIndex.value + 1) % searchMatches.value.length;
+  scrollToCurrentMatch();
+}
+
+function prevLogSearchMatch() {
+  if (searchMatches.value.length === 0) return;
+  logSearchIndex.value =
+    (logSearchIndex.value - 1 + searchMatches.value.length) % searchMatches.value.length;
+  scrollToCurrentMatch();
+}
+
+function openLogSearch() {
+  isLogSearchOpen.value = true;
+  nextTick(() => {
+    logSearchInput.value?.focus();
+    logSearchInput.value?.select();
+    if (searchMatches.value.length > 0) {
+      scrollToCurrentMatch();
+    }
+  });
+}
+
+function closeLogSearch() {
+  isLogSearchOpen.value = false;
 }
 
 onMounted(async () => {
@@ -446,6 +658,34 @@ onMounted(async () => {
     ) {
       e.preventDefault();
       await invoke("exit_app");
+      return;
+    }
+
+    // Cmd+F or Ctrl+F: Open Log Search
+    if ((e.metaKey || e.ctrlKey) && (e.key === "f" || e.key === "F")) {
+      e.preventDefault();
+      openLogSearch();
+      return;
+    }
+
+    // F3 / Shift+F3 for find next/prev
+    if (e.key === "F3") {
+      e.preventDefault();
+      if (!isLogSearchOpen.value) {
+        openLogSearch();
+      } else if (e.shiftKey) {
+        prevLogSearchMatch();
+      } else {
+        nextLogSearchMatch();
+      }
+      return;
+    }
+
+    // Escape to close search
+    if (e.key === "Escape" && isLogSearchOpen.value) {
+      e.preventDefault();
+      closeLogSearch();
+      return;
     }
   });
 
@@ -934,6 +1174,7 @@ onMounted(async () => {
           class="resizer-h"
           :title="t.dragResizeHeight"
           @mousedown="startResizeLog"
+          @dblclick="toggleMaximizeLog"
         >
           <div class="resizer-thumb-h"></div>
         </div>
@@ -953,30 +1194,187 @@ onMounted(async () => {
             </div>
 
             <div class="log-controls">
+              <!-- Search Toggle Button -->
+              <button
+                type="button"
+                class="log-btn"
+                :class="{ active: isLogSearchOpen }"
+                :title="t.searchLogsTooltip"
+                @click="isLogSearchOpen ? closeLogSearch() : openLogSearch()"
+              >
+                <svg viewBox="0 0 24 24" width="11" height="11" stroke="currentColor" stroke-width="2.2" fill="none">
+                  <circle cx="11" cy="11" r="8" />
+                  <line x1="21" y1="21" x2="16.65" y2="16.65" />
+                </svg>
+                <span>{{ t.searchLogs }}</span>
+              </button>
+
               <label class="auto-scroll-label">
                 <input type="checkbox" v-model="autoScroll" />
                 <span>{{ t.autoScroll }}</span>
               </label>
+
+              <!-- Maximize / Restore Toggle Button -->
+              <button
+                type="button"
+                class="log-btn icon-only"
+                :title="isLogMaximized ? t.restoreLog : t.maximizeLog"
+                @click="toggleMaximizeLog"
+              >
+                <svg v-if="!isLogMaximized" viewBox="0 0 24 24" width="11" height="11" stroke="currentColor" stroke-width="2.2" fill="none">
+                  <polyline points="15 3 21 3 21 9" />
+                  <polyline points="9 21 3 21 3 15" />
+                  <line x1="21" y1="3" x2="14" y2="10" />
+                  <line x1="3" y1="21" x2="10" y2="14" />
+                </svg>
+                <svg v-else viewBox="0 0 24 24" width="11" height="11" stroke="currentColor" stroke-width="2.2" fill="none">
+                  <polyline points="4 14 10 14 10 20" />
+                  <polyline points="20 10 14 10 14 4" />
+                  <line x1="14" y1="10" x2="21" y2="3" />
+                  <line x1="3" y1="21" x2="10" y2="14" />
+                </svg>
+              </button>
+
               <button class="clear-btn" @click="clearCurrentLogs">{{ t.btnClear }}</button>
             </div>
           </div>
 
-          <div ref="logContainer" class="log-body">
+          <!-- Floating Search Box inside Log Section -->
+          <div v-if="isLogSearchOpen" class="log-search-panel">
+            <div class="search-input-box">
+              <svg class="search-prefix-icon" viewBox="0 0 24 24" width="12" height="12" stroke="currentColor" stroke-width="2.2" fill="none">
+                <circle cx="11" cy="11" r="8" />
+                <line x1="21" y1="21" x2="16.65" y2="16.65" />
+              </svg>
+              <input
+                ref="logSearchInput"
+                v-model="logSearchQuery"
+                type="text"
+                class="search-inner-input"
+                :placeholder="t.searchPlaceholder"
+                @keydown.enter.prevent="nextLogSearchMatch"
+                @keydown.shift.enter.prevent.stop="prevLogSearchMatch"
+                @keydown.esc.prevent="closeLogSearch"
+              />
+            </div>
+
+            <div class="search-actions">
+              <!-- Match Count -->
+              <span
+                class="search-match-badge"
+                :class="{
+                  'has-matches': searchMatches.length > 0,
+                  'no-matches': logSearchQuery.trim() && searchMatches.length === 0
+                }"
+              >
+                {{
+                  !logSearchQuery.trim()
+                    ? '0 / 0'
+                    : searchMatches.length === 0
+                    ? t.noMatches
+                    : t.matchCount(logSearchIndex + 1, searchMatches.length)
+                }}
+              </span>
+
+              <!-- Case Sensitive -->
+              <button
+                type="button"
+                class="search-sub-btn"
+                :class="{ active: logSearchCaseSensitive }"
+                :title="t.caseSensitive"
+                @click="logSearchCaseSensitive = !logSearchCaseSensitive"
+              >
+                Aa
+              </button>
+
+              <!-- Prev -->
+              <button
+                type="button"
+                class="search-sub-btn"
+                :title="t.prevMatch"
+                :disabled="searchMatches.length === 0"
+                @click="prevLogSearchMatch"
+              >
+                <svg viewBox="0 0 24 24" width="12" height="12" stroke="currentColor" stroke-width="2.5" fill="none">
+                  <polyline points="18 15 12 9 6 15" />
+                </svg>
+              </button>
+
+              <!-- Next -->
+              <button
+                type="button"
+                class="search-sub-btn"
+                :title="t.nextMatch"
+                :disabled="searchMatches.length === 0"
+                @click="nextLogSearchMatch"
+              >
+                <svg viewBox="0 0 24 24" width="12" height="12" stroke="currentColor" stroke-width="2.5" fill="none">
+                  <polyline points="6 9 12 15 18 9" />
+                </svg>
+              </button>
+
+              <!-- Close -->
+              <button
+                type="button"
+                class="search-sub-btn close"
+                :title="t.closeSearch"
+                @click="closeLogSearch"
+              >
+                <svg viewBox="0 0 24 24" width="12" height="12" stroke="currentColor" stroke-width="2.5" fill="none">
+                  <line x1="18" y1="6" x2="6" y2="18" />
+                  <line x1="6" y1="6" x2="18" y2="18" />
+                </svg>
+              </button>
+            </div>
+          </div>
+
+          <div
+            ref="logContainer"
+            class="log-body"
+            @scroll="onLogScroll"
+          >
             <div
               v-for="(line, idx) in currentLogs"
               :key="idx"
+              :data-line-idx="idx"
               class="log-line"
               :class="{
                 'is-error': line.toLowerCase().includes('error') || line.toLowerCase().includes('failed'),
                 'is-info': line.startsWith('[服务]') || line.startsWith('[系统]') || line.startsWith('[重启策略]')
               }"
             >
-              {{ line }}
+              <template v-if="!isLogSearchOpen || !logSearchQuery.trim()">
+                {{ line }}
+              </template>
+              <template v-else>
+                <span
+                  v-for="(part, pIdx) in getLineParts(line, idx)"
+                  :key="pIdx"
+                  :class="{
+                    'search-match': part.isMatch,
+                    'search-match-active': part.isActive
+                  }"
+                >{{ part.text }}</span>
+              </template>
             </div>
             <div v-if="currentLogs.length === 0" class="log-empty">
               {{ t.emptyLog }}
             </div>
           </div>
+
+          <!-- Floating Jump to Bottom Button when user scrolled up -->
+          <button
+            v-if="userScrolledUp"
+            type="button"
+            class="jump-to-bottom-pill"
+            :title="t.jumpToBottom"
+            @click="jumpToBottom"
+          >
+            <svg viewBox="0 0 24 24" width="10" height="10" stroke="currentColor" stroke-width="2.5" fill="none">
+              <polyline points="6 9 12 15 18 9" />
+            </svg>
+            <span>{{ t.jumpToBottom }}</span>
+          </button>
         </section>
       </main>
     </div>
@@ -2069,6 +2467,7 @@ onMounted(async () => {
 
 /* Log Section (Warm Claude Code Dark Console) */
 .log-section {
+  position: relative;
   background: #1c1917;
   display: flex;
   flex-direction: column;
@@ -2114,9 +2513,41 @@ onMounted(async () => {
 .log-controls {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
   font-size: 10.5px;
   color: #a8a29e;
+}
+
+.log-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: #2a2622;
+  border: 1px solid #3c3732;
+  color: #a8a29e;
+  padding: 3px 8px;
+  border-radius: 4px;
+  font-size: 10.5px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  line-height: 1.2;
+}
+
+.log-btn:hover {
+  background: #342f2a;
+  color: #f5f5f4;
+  border-color: #4a443e;
+}
+
+.log-btn.active {
+  background: #d97706;
+  border-color: #b45309;
+  color: #ffffff;
+  font-weight: 500;
+}
+
+.log-btn.icon-only {
+  padding: 3px 6px;
 }
 
 .auto-scroll-label {
@@ -2140,6 +2571,134 @@ onMounted(async () => {
   color: #f5f5f4;
 }
 
+/* Log Search Panel */
+.log-search-panel {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 6px 14px;
+  background: #221e1b;
+  border-bottom: 1px solid #383430;
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.25);
+  animation: searchSlideIn 0.15s ease;
+  z-index: 5;
+}
+
+@keyframes searchSlideIn {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.search-input-box {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: 1;
+  background: #171513;
+  border: 1px solid #383430;
+  border-radius: 5px;
+  padding: 3px 8px;
+  transition: border-color 0.15s ease;
+}
+
+.search-input-box:focus-within {
+  border-color: #d97706;
+  box-shadow: 0 0 0 2px rgba(217, 119, 6, 0.2);
+}
+
+.search-prefix-icon {
+  color: #8c8479;
+  flex-shrink: 0;
+}
+
+.search-inner-input {
+  width: 100%;
+  background: transparent;
+  border: none;
+  outline: none;
+  font-family: inherit;
+  font-size: 11px;
+  color: #f5f5f4;
+}
+
+.search-inner-input::placeholder {
+  color: #6b645c;
+}
+
+.search-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.search-match-badge {
+  font-family: monospace;
+  font-size: 10px;
+  color: #8c8479;
+  padding: 2px 6px;
+  background: #171513;
+  border-radius: 4px;
+  border: 1px solid #34302c;
+  white-space: nowrap;
+}
+
+.search-match-badge.has-matches {
+  color: #f59e0b;
+  border-color: #6d4812;
+  background: #2b1f13;
+}
+
+.search-match-badge.no-matches {
+  color: #f87171;
+  border-color: #5c2020;
+  background: #2b1414;
+}
+
+.search-sub-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  background: #2a2622;
+  border: 1px solid #383430;
+  border-radius: 4px;
+  color: #a8a29e;
+  font-size: 10.5px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.12s ease;
+}
+
+.search-sub-btn:hover:not(:disabled) {
+  background: #383430;
+  color: #f5f5f4;
+}
+
+.search-sub-btn:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
+.search-sub-btn.active {
+  background: #d97706;
+  border-color: #b45309;
+  color: #ffffff;
+}
+
+.search-sub-btn.close:hover {
+  background: #451a1a;
+  color: #fca5a5;
+  border-color: #7f1d1d;
+}
+
 /* Dedicated Realtime Console Body */
 .log-body {
   flex: 1;
@@ -2156,7 +2715,7 @@ onMounted(async () => {
   scrollbar-color: #44403c #1c1917;
 }
 
-/* Dark Scrollbar for Terminal Console (Resolves black log + white scrollbar issue) */
+/* Dark Scrollbar for Terminal Console */
 .log-body::-webkit-scrollbar {
   width: 6px;
   height: 6px;
@@ -2188,9 +2747,55 @@ onMounted(async () => {
   color: #fbbf24;
 }
 
+/* Search Highlights */
+.search-match {
+  background: #854d0e;
+  color: #fef3c7;
+  border-radius: 2px;
+  padding: 0 1px;
+}
+
+.search-match-active {
+  background: #f59e0b;
+  color: #1c1917;
+  font-weight: 600;
+  border-radius: 2px;
+  padding: 0 2px;
+  outline: 2px solid #fde68a;
+}
+
 .log-empty {
   color: #78716c;
   font-style: italic;
   padding: 8px 0;
+}
+
+/* Floating Jump to Bottom Button */
+.jump-to-bottom-pill {
+  position: absolute;
+  bottom: 14px;
+  right: 24px;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 12px;
+  border-radius: 9999px;
+  background: #24201d;
+  border: 1px solid #44403c;
+  color: #f59e0b;
+  font-size: 10.5px;
+  font-weight: 500;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+  cursor: pointer;
+  transition: all 0.15s ease;
+  z-index: 10;
+  user-select: none;
+}
+
+.jump-to-bottom-pill:hover {
+  background: #2e2824;
+  border-color: #d97706;
+  transform: translateY(-1px);
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.5);
 }
 </style>
