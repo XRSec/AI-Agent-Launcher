@@ -407,66 +407,94 @@ pub async fn download_and_install(
 async fn launch_installer_and_exit(app: AppHandle, dest_path: PathBuf) -> Result<(), String> {
     #[cfg(target_os = "macos")]
     {
+        use std::os::unix::process::CommandExt;
+
         let pid = std::process::id();
         let target_app = get_target_app_bundle();
         let dmg_path_str = dest_path.to_string_lossy().to_string();
         let target_app_str = target_app.to_string_lossy().to_string();
 
-        let script = r#"
-            PID="$1"
-            DMG="$2"
-            TARGET="$3"
+        let script = r#"#!/bin/sh
+exec >> /tmp/ai_agent_launcher_updater.log 2>&1
+echo "=== $(date): Updater script started ==="
+PID="$1"
+DMG="$2"
+TARGET="$3"
 
-            # 1. Wait for current app PID to exit
-            while kill -0 "$PID" 2>/dev/null; do
-                sleep 0.1
-            done
+echo "Waiting for PID $PID to exit..."
+COUNT=0
+while kill -0 "$PID" 2>/dev/null && [ "$COUNT" -lt 150 ]; do
+    sleep 0.1
+    COUNT=$((COUNT + 1))
+done
 
-            # 2. Mount DMG headlessly without opening Finder
-            MOUNT_DIR=$(mktemp -d /tmp/ai_agent_launcher_mount.XXXXXX)
-            hdiutil attach "$DMG" -nobrowse -noautoopen -mountpoint "$MOUNT_DIR" -quiet
+if kill -0 "$PID" 2>/dev/null; then
+    echo "PID $PID still running after 15s, sending SIGKILL..."
+    kill -9 "$PID" 2>/dev/null || true
+fi
 
-            # 3. Find .app bundle inside mount directory
-            APP_SRC=$(find "$MOUNT_DIR" -maxdepth 1 -name "*.app" | head -n 1)
+echo "Mounting DMG: $DMG"
+MOUNT_DIR=$(mktemp -d /tmp/ai_agent_launcher_mount.XXXXXX)
+hdiutil attach "$DMG" -nobrowse -noautoopen -mountpoint "$MOUNT_DIR" -quiet -noverify
+MOUNT_CODE=$?
+echo "hdiutil attach exit code: $MOUNT_CODE"
 
-            if [ -n "$APP_SRC" ] && [ -d "$APP_SRC" ]; then
-                # 4. Remove old version and copy new version
-                rm -rf "$TARGET"
-                cp -R "$APP_SRC" "$TARGET"
+APP_SRC=$(find "$MOUNT_DIR" -maxdepth 1 -name "*.app" | head -n 1)
+echo "Found APP_SRC: $APP_SRC"
 
-                # 5. Clean up mount and temp DMG
-                hdiutil detach "$MOUNT_DIR" -force -quiet
-                rm -rf "$MOUNT_DIR"
-                rm -f "$DMG"
+if [ -n "$APP_SRC" ] && [ -d "$APP_SRC" ]; then
+    echo "Replacing $TARGET with $APP_SRC..."
+    rm -rf "$TARGET"
+    ditto "$APP_SRC" "$TARGET"
+    xattr -rd com.apple.quarantine "$TARGET" 2>/dev/null || true
 
-                # 6. Relaunch the newly installed application
-                sleep 0.4
-                open -a "$TARGET" || open "$TARGET"
-            else
-                # Fallback to standard DMG open if structure differed
-                hdiutil detach "$MOUNT_DIR" -force -quiet
-                rm -rf "$MOUNT_DIR"
-                open "$DMG"
-            fi
-        "#;
+    echo "Cleaning up mount and temp DMG..."
+    hdiutil detach "$MOUNT_DIR" -force -quiet || true
+    rm -rf "$MOUNT_DIR"
+    rm -f "$DMG"
 
-        let spawn_res = std::process::Command::new("sh")
-            .arg("-c")
-            .arg(script)
-            .arg("ai-agent-launcher-updater")
+    echo "Relaunching $TARGET..."
+    sleep 0.5
+    open "$TARGET"
+    echo "=== Updater finished successfully ==="
+else
+    echo "APP_SRC not found, opening DMG directly as fallback..."
+    hdiutil detach "$MOUNT_DIR" -force -quiet || true
+    rm -rf "$MOUNT_DIR"
+    open "$DMG"
+fi
+"#;
+
+        let script_path = std::env::temp_dir().join("ai_agent_launcher_updater.sh");
+        if let Err(e) = std::fs::write(&script_path, script) {
+            let _ = std::process::Command::new("open").arg(&dest_path).spawn();
+            return Err(format!("写入更新执行脚本失败: {}", e));
+        }
+
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            let _ = std::fs::set_permissions(&script_path, std::fs::Permissions::from_mode(0o755));
+        }
+
+        let mut cmd = std::process::Command::new("/bin/sh");
+        cmd.arg(&script_path)
             .arg(pid.to_string())
             .arg(&dmg_path_str)
             .arg(&target_app_str)
-            .spawn();
+            .stdin(std::process::Stdio::null())
+            .stdout(std::process::Stdio::null())
+            .stderr(std::process::Stdio::null())
+            .process_group(0);
 
-        if let Err(e) = spawn_res {
+        if let Err(e) = cmd.spawn() {
             let _ = std::process::Command::new("open").arg(&dest_path).spawn();
             return Err(format!("启动自动更新脚本失败: {}", e));
         }
 
-        tokio::time::sleep(Duration::from_millis(500)).await;
+        tokio::time::sleep(Duration::from_millis(300)).await;
         app.exit(0);
-        Ok(())
+        std::process::exit(0);
     }
 
     #[cfg(target_os = "windows")]
