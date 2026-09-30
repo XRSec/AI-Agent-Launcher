@@ -458,7 +458,7 @@ function scrollToBottom() {
   if (!autoScroll.value || userScrolledUp.value) return;
   nextTick(() => {
     if (logContainer.value) {
-      logContainer.value.scrollTop = logContainer.value.scrollHeight;
+      logContainer.value.scrollTop = logContainer.value.scrollHeight + 100;
     }
   });
 }
@@ -468,7 +468,7 @@ function jumpToBottom() {
   autoScroll.value = true;
   nextTick(() => {
     if (logContainer.value) {
-      logContainer.value.scrollTop = logContainer.value.scrollHeight;
+      logContainer.value.scrollTop = logContainer.value.scrollHeight + 100;
     }
   });
 }
@@ -1360,6 +1360,8 @@ onMounted(async () => {
             <div v-if="currentLogs.length === 0" class="log-empty">
               {{ t.emptyLog }}
             </div>
+            <!-- Spacer to ensure bottom log line has full breathing room and is never cut in half -->
+            <div class="log-bottom-spacer"></div>
           </div>
 
           <!-- Floating Jump to Bottom Button when user scrolled up -->
@@ -2702,17 +2704,24 @@ onMounted(async () => {
 /* Dedicated Realtime Console Body */
 .log-body {
   flex: 1;
+  min-height: 0;
   overflow-y: auto;
-  padding: 8px 16px;
+  padding: 8px 16px 20px 16px;
+  box-sizing: border-box;
   font-family: "SF Mono", "Fira Code", Menlo, Monaco, Consolas, monospace;
   font-size: 11px;
   font-weight: 400;
-  line-height: 1.55;
+  line-height: 1.6;
   color: #e7e5e4;
   user-select: text;
   background: #1c1917;
   scrollbar-width: thin;
   scrollbar-color: #44403c #1c1917;
+}
+
+.log-bottom-spacer {
+  height: 16px;
+  flex-shrink: 0;
 }
 
 /* Dark Scrollbar for Terminal Console */
