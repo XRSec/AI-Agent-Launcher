@@ -18,7 +18,19 @@ extern "system" {
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    tauri::Builder::default()
+    let mut builder = tauri::Builder::default();
+    
+    #[cfg(desktop)]
+    {
+        builder = builder.plugin(tauri_plugin_single_instance::init(|app, argv, _cwd| {
+            let is_autostart = argv.iter().any(|arg| arg == "--autostart");
+            if !is_autostart {
+                crate::tray::show_and_focus_main_window(app);
+            }
+        }));
+    }
+
+    builder = builder
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_autostart::init(
@@ -26,6 +38,14 @@ pub fn run() {
             Some(vec!["--autostart"]),
         ))
         .setup(|app| {
+            let is_autostart = std::env::args().any(|arg| arg == "--autostart");
+            if is_autostart {
+                #[cfg(target_os = "macos")]
+                let _ = app.set_activation_policy(tauri::ActivationPolicy::Accessory);
+            } else {
+                crate::tray::show_and_focus_main_window(app.handle());
+            }
+
             let app_data_dir = app
                 .path()
                 .app_data_dir()
@@ -89,6 +109,7 @@ pub fn run() {
 
                 if is_alt_f4 {
                     // User explicitly pressed Alt+F4 on Windows: gracefully stop agents & quit
+                    api.prevent_close();
                     let app_handle = window.app_handle().clone();
                     tauri::async_runtime::spawn(async move {
                         let _ = runner::stop_all_agents(&app_handle).await;
@@ -121,8 +142,17 @@ pub fn run() {
             commands::exit_app,
             commands::check_app_update,
             commands::download_and_install_update,
-        ])
-        .run(tauri::generate_context!())
+        ]);
+
+    let app = builder
+        .build(tauri::generate_context!())
         .expect("error while running tauri application");
+
+    app.run(|app_handle, event| {
+        #[cfg(target_os = "macos")]
+        if let tauri::RunEvent::Reopen { .. } = event {
+            crate::tray::show_and_focus_main_window(app_handle);
+        }
+    });
 }
 
