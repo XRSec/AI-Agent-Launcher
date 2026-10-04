@@ -1,18 +1,30 @@
+use crate::runner::stop_all_agents;
 use tauri::{
     menu::{CheckMenuItemBuilder, MenuBuilder, MenuItemBuilder},
     tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
     AppHandle, Emitter, Listener, Manager,
 };
 use tauri_plugin_autostart::ManagerExt;
-use crate::runner::stop_all_agents;
 
 pub fn show_and_focus_main_window(app: &tauri::AppHandle) {
     #[cfg(target_os = "macos")]
     let _ = app.set_activation_policy(tauri::ActivationPolicy::Regular);
     if let Some(window) = app.get_webview_window("main") {
-        let _ = window.show();
-        let _ = window.unminimize();
-        let _ = window.set_focus();
+        let is_visible = window.is_visible().unwrap_or(false);
+        if !is_visible {
+            if let Err(e) = window.center() {
+                eprintln!("Failed to center window: {}", e);
+            }
+        }
+        if let Err(e) = window.show() {
+            eprintln!("Failed to show window: {}", e);
+        }
+        if let Err(e) = window.unminimize() {
+            eprintln!("Failed to unminimize window: {}", e);
+        }
+        if let Err(e) = window.set_focus() {
+            eprintln!("Failed to focus window: {}", e);
+        }
     }
 }
 
@@ -38,42 +50,43 @@ pub fn setup_tray(app: &AppHandle) -> Result<(), Box<dyn std::error::Error>> {
         .item(&MenuItemBuilder::with_id("quit", "退出").build(app)?)
         .build()?;
 
-    let icon = app.default_window_icon().cloned().ok_or("No default icon found")?;
+    let icon = app
+        .default_window_icon()
+        .cloned()
+        .ok_or("No default icon found")?;
 
     let _tray = TrayIconBuilder::with_id("main-tray")
         .tooltip("AI Agent Launcher")
         .icon(icon)
         .menu(&menu)
         .show_menu_on_left_click(false)
-        .on_menu_event(|app, event| {
-            match event.id().as_ref() {
-                "show_window" => {
-                    show_and_focus_main_window(app);
-                }
-                "about" => {
-                    show_and_focus_main_window(app);
-                    let _ = app.emit("menu-open-about", ());
-                }
-                "toggle_autostart" => {
-                    let autolaunch = app.autolaunch();
-                    let is_on = autolaunch.is_enabled().unwrap_or(false);
-                    if is_on {
-                        let _ = autolaunch.disable();
-                    } else {
-                        let _ = autolaunch.enable();
-                    }
-                    let new_state = !is_on;
-                    let _ = app.emit("autostart-changed", new_state);
-                }
-                "quit" => {
-                    let app_clone = app.clone();
-                    tauri::async_runtime::spawn(async move {
-                        let _ = stop_all_agents(&app_clone).await;
-                        app_clone.exit(0);
-                    });
-                }
-                _ => {}
+        .on_menu_event(|app, event| match event.id().as_ref() {
+            "show_window" => {
+                show_and_focus_main_window(app);
             }
+            "about" => {
+                show_and_focus_main_window(app);
+                let _ = app.emit("menu-open-about", ());
+            }
+            "toggle_autostart" => {
+                let autolaunch = app.autolaunch();
+                let is_on = autolaunch.is_enabled().unwrap_or(false);
+                if is_on {
+                    let _ = autolaunch.disable();
+                } else {
+                    let _ = autolaunch.enable();
+                }
+                let new_state = !is_on;
+                let _ = app.emit("autostart-changed", new_state);
+            }
+            "quit" => {
+                let app_clone = app.clone();
+                tauri::async_runtime::spawn(async move {
+                    let _ = stop_all_agents(&app_clone).await;
+                    app_clone.exit(0);
+                });
+            }
+            _ => {}
         })
         .on_tray_icon_event(|tray, event| {
             if let TrayIconEvent::Click {
