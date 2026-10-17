@@ -132,11 +132,11 @@ function startResizeSidebar(e: PointerEvent) {
     }
     const newW = Math.min(Math.max(startW + delta, 52), 480);
     sidebarWidth.value = newW;
-    localStorage.setItem("launcher_sidebar_width", String(newW));
   }
 
   function onPointerUp(upEvent: PointerEvent) {
     isDraggingSidebar.value = false;
+    localStorage.setItem("launcher_sidebar_width", String(sidebarWidth.value));
     if (targetEl && targetEl.releasePointerCapture) {
       try {
         targetEl.releasePointerCapture(upEvent.pointerId);
@@ -176,11 +176,11 @@ function startResizeLog(e: PointerEvent) {
     const newH = Math.min(Math.max(startH + delta, 80), maxH);
     logHeight.value = newH;
     isLogMaximized.value = false;
-    localStorage.setItem("launcher_log_height", String(newH));
   }
 
   function onPointerUp(upEvent: PointerEvent) {
     isDraggingLog.value = false;
+    localStorage.setItem("launcher_log_height", String(logHeight.value));
     if (targetEl && targetEl.releasePointerCapture) {
       try {
         targetEl.releasePointerCapture(upEvent.pointerId);
@@ -947,7 +947,13 @@ onMounted(async () => {
 </script>
 
 <template>
-  <div class="app-layout" :class="{ 'is-resizing': isDraggingSidebar || isDraggingLog }">
+  <div
+    class="app-layout"
+    :class="{
+      'is-resizing-v': isDraggingSidebar,
+      'is-resizing-h': isDraggingLog,
+    }"
+  >
     <!-- Top Header (Layer 0 Surface) -->
     <header class="app-header">
       <div class="header-left">
@@ -1942,9 +1948,14 @@ onMounted(async () => {
   -webkit-user-select: text !important;
 }
 
-.app-layout.is-resizing {
+.app-layout.is-resizing-v {
   user-select: none;
   cursor: col-resize;
+}
+
+.app-layout.is-resizing-h {
+  user-select: none;
+  cursor: row-resize;
 }
 
 /* Global Light/Dark Scrollbars */

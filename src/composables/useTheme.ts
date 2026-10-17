@@ -10,13 +10,15 @@ export function getSystemTheme(): ResolvedTheme {
   return "light";
 }
 
+export const systemTheme = ref<ResolvedTheme>(getSystemTheme());
+
 export const themeSetting = ref<ThemeSetting>(
   (typeof localStorage !== "undefined" && (localStorage.getItem(STORAGE_KEY) as ThemeSetting)) || "auto"
 );
 
 export const resolvedTheme = computed<ResolvedTheme>(() => {
   if (themeSetting.value === "auto") {
-    return getSystemTheme();
+    return systemTheme.value;
   }
   return themeSetting.value;
 });
@@ -34,29 +36,43 @@ export function applyThemeToDom(theme: ResolvedTheme) {
 
 export function setThemeSetting(setting: ThemeSetting) {
   themeSetting.value = setting;
+  if (setting === "auto") {
+    systemTheme.value = getSystemTheme();
+  }
   if (typeof localStorage !== "undefined") {
     localStorage.setItem(STORAGE_KEY, setting);
   }
   applyThemeToDom(resolvedTheme.value);
 }
 
-let mediaQueryListenerAttached = false;
+let activeMediaQuery: MediaQueryList | null = null;
+let activeHandler: (() => void) | null = null;
 
 export function initTheme() {
+  systemTheme.value = getSystemTheme();
   applyThemeToDom(resolvedTheme.value);
 
-  if (typeof window !== "undefined" && window.matchMedia && !mediaQueryListenerAttached) {
-    const mediaQuery = window.matchMedia("(prefers-color-scheme: dark)");
-    const handler = () => {
+  if (typeof window !== "undefined" && window.matchMedia) {
+    if (activeMediaQuery && activeHandler) {
+      if (activeMediaQuery.removeEventListener) {
+        activeMediaQuery.removeEventListener("change", activeHandler);
+      } else if ((activeMediaQuery as any).removeListener) {
+        (activeMediaQuery as any).removeListener(activeHandler);
+      }
+    }
+
+    activeMediaQuery = window.matchMedia("(prefers-color-scheme: dark)");
+    activeHandler = () => {
+      systemTheme.value = getSystemTheme();
       if (themeSetting.value === "auto") {
         applyThemeToDom(resolvedTheme.value);
       }
     };
-    if (mediaQuery.addEventListener) {
-      mediaQuery.addEventListener("change", handler);
-    } else if ((mediaQuery as any).addListener) {
-      (mediaQuery as any).addListener(handler);
+
+    if (activeMediaQuery.addEventListener) {
+      activeMediaQuery.addEventListener("change", activeHandler);
+    } else if ((activeMediaQuery as any).addListener) {
+      (activeMediaQuery as any).addListener(activeHandler);
     }
-    mediaQueryListenerAttached = true;
   }
 }

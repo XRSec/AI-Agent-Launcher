@@ -40,7 +40,7 @@ const thumbStyle = computed(() => {
 
   return {
     width: `calc(${widthPercent}% - 4px / ${total})`,
-    left: `calc(2px + ${leftPercent}%)`,
+    left: `calc(2px + ${leftPercent}% - ${activeIndex.value * 4}px / ${total})`,
   };
 });
 
@@ -146,7 +146,8 @@ function handleKeydown(e: KeyboardEvent) {
 .cds-segmented-btn {
   position: relative;
   z-index: 2;
-  flex: 1;
+  flex: 1 1 0%;
+  min-width: 0;
   display: inline-flex;
   align-items: center;
   justify-content: center;

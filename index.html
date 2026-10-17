@@ -6,6 +6,21 @@
     <title>AI Agent Launcher</title>
     <link rel="icon" type="image/svg+xml" href="/app-icon.svg" />
     <link rel="alternate icon" href="/favicon.png" />
+    <script>
+      (function() {
+        try {
+          var setting = localStorage.getItem("launcher_theme_setting") || "auto";
+          var isDark = setting === "dark" || (setting === "auto" && window.matchMedia("(prefers-color-scheme: dark)").matches);
+          if (isDark) {
+            document.documentElement.classList.add("dark");
+            document.documentElement.setAttribute("data-theme", "dark");
+          } else {
+            document.documentElement.classList.remove("dark");
+            document.documentElement.setAttribute("data-theme", "light");
+          }
+        } catch (_) {}
+      })();
+    </script>
     <style>
       *, *::before, *::after {
         box-sizing: border-box;

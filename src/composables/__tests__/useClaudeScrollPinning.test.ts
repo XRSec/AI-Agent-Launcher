@@ -90,4 +90,30 @@ describe("useClaudeScrollPinning", () => {
       behavior: "auto",
     });
   });
+
+  it("handles smooth scrolling without prematurely unpinning during animation", () => {
+    const { containerRef, isPinned, showJumpControl, scrollToBottom, handleScroll } = useClaudeScrollPinning();
+    const fakeEl = {
+      scrollHeight: 1000,
+      scrollTop: 200,
+      clientHeight: 100,
+      scrollTo: vi.fn(),
+    } as unknown as HTMLElement;
+
+    containerRef.value = fakeEl;
+    scrollToBottom(true); // Smooth scroll initiated
+
+    expect(isPinned.value).toBe(true);
+    expect(showJumpControl.value).toBe(false);
+
+    // Browser dispatches multiple intermediate scroll events while traveling
+    fakeEl.scrollTop = 500;
+    handleScroll();
+    fakeEl.scrollTop = 700;
+    handleScroll();
+
+    // Must still stay pinned and not flash the jump button
+    expect(isPinned.value).toBe(true);
+    expect(showJumpControl.value).toBe(false);
+  });
 });

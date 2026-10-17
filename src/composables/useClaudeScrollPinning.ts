@@ -15,7 +15,7 @@ export function useClaudeScrollPinning(options: ScrollPinningOptions = {}) {
   const isPinned = ref(true);
   const showJumpControl = ref(false);
   const lastUserInputAt = ref(0);
-  const programmaticScroll = ref(false);
+  const programmaticScrollUntil = ref(0);
 
   function markUserInput() {
     lastUserInputAt.value = typeof performance !== "undefined" ? performance.now() : Date.now();
@@ -23,10 +23,13 @@ export function useClaudeScrollPinning(options: ScrollPinningOptions = {}) {
   }
 
   function handleScroll() {
-    if (programmaticScroll.value) {
-      programmaticScroll.value = false;
+    const now = typeof performance !== "undefined" ? performance.now() : Date.now();
+    if (now < programmaticScrollUntil.value) {
+      isPinned.value = true;
+      showJumpControl.value = false;
       return;
     }
+
     const el = containerRef.value;
     if (!el) return;
 
@@ -40,7 +43,10 @@ export function useClaudeScrollPinning(options: ScrollPinningOptions = {}) {
   function scrollToBottom(smooth = false) {
     const el = containerRef.value;
     if (!el) return;
-    programmaticScroll.value = true;
+    const now = typeof performance !== "undefined" ? performance.now() : Date.now();
+    // 平滑滚动在动画期间（400ms）持续保持图钉锁定状态，瞬时滚动设置 60ms 吸收微任务事件
+    programmaticScrollUntil.value = now + (smooth ? 400 : 60);
+
     if (typeof el.scrollTo === "function") {
       el.scrollTo({
         top: el.scrollHeight,

@@ -89,4 +89,39 @@ describe("useTheme composable", () => {
     initTheme();
     expect(addEventListener).toHaveBeenCalled();
   });
+
+  it("dynamically updates resolvedTheme when system changes theme in auto mode", () => {
+    let changeHandler: (() => void) | null = null;
+    let isDark = false;
+
+    window.matchMedia = vi.fn().mockImplementation((query) => ({
+      get matches() {
+        return isDark;
+      },
+      media: query,
+      onchange: null,
+      addListener: vi.fn(),
+      removeListener: vi.fn(),
+      addEventListener: (_event: string, handler: () => void) => {
+        changeHandler = handler;
+      },
+      removeEventListener: vi.fn(),
+      dispatchEvent: vi.fn(),
+    }));
+
+    setThemeSetting("auto");
+    initTheme();
+    expect(resolvedTheme.value).toBe("light");
+    expect(document.documentElement.classList.contains("dark")).toBe(false);
+
+    // Simulate OS switching to dark mode
+    isDark = true;
+    if (typeof changeHandler === "function") {
+      (changeHandler as () => void)();
+    }
+
+    expect(resolvedTheme.value).toBe("dark");
+    expect(document.documentElement.classList.contains("dark")).toBe(true);
+    expect(document.documentElement.getAttribute("data-theme")).toBe("dark");
+  });
 });
