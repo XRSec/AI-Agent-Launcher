@@ -1,0 +1,169 @@
+/**
+ * Claude Design System (CDS) - Complete Theme & Motion Stylesheet
+ * 逆向溯源自 Claude Desktop (open-claude-ui)
+ */
+
+:root {
+  /* 1. 表面色彩阶梯 (Surfaces & Colors) */
+  --cds-surface-0: #f5f5f3;        /* 全局应用背景 Canvas */
+  --cds-surface-1: #fcfcfb;        /* 侧边栏/中间层基底 */
+  --cds-surface-2: #ffffff;        /* 消息气泡/卡片表面 */
+  --cds-surface-3: #ffffff;        /* 浮动面板/输入框高层表面 */
+  --cds-surface-popover: #ffffff;  /* 悬浮 Popover 纯白表面 */
+
+  --cds-clay: #d97757;             /* 品牌陶土主色 */
+  --cds-clay-hover: #cc5a36;       /* 陶土色悬停加深态 */
+  --cds-clay-light: #fbf3ef;       /* 陶土极浅背景色 */
+  --cds-clay-glow: rgba(217, 119, 87, 0.25);
+
+  /* 2. Alpha 透明度与单闭合边框色系 (Alpha & The 1-Border Rule) */
+  --cds-alpha-0: hsla(0, 0%, 8%, 0);
+  --cds-alpha-1: hsla(0, 0%, 8%, 0.05); /* Ghost hover */
+  --cds-alpha-2: hsla(0, 0%, 8%, 0.10); /* Standard border */
+  --cds-alpha-3: hsla(0, 0%, 8%, 0.20); /* Border strong */
+  --cds-alpha-4: hsla(0, 0%, 8%, 0.35); /* Heavy divider */
+
+  --cds-border: var(--cds-alpha-2);
+  --cds-border-strong: var(--cds-alpha-3);
+  --cds-ring-hairline: 1px;
+
+  /* 3. 阴影系统 (Elevation Shadows) */
+  --cds-shadow-color: rgba(0, 0, 0, 0.08);
+  --cds-shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05), 0 2px 8px 0 var(--cds-shadow-color);
+  --cds-shadow-md: 0 2px 4px 0 rgba(0, 0, 0, 0.05), 0 6px 16px 0 var(--cds-shadow-color);
+  --cds-shadow-lg: 0 4px 8px 0 rgba(0, 0, 0, 0.06), 0 12px 28px -2px var(--cds-shadow-color);
+  --cds-shadow-popover: 0 8px 24px rgba(0, 0, 0, 0.12), 0 2px 6px rgba(0, 0, 0, 0.08);
+  --cds-panel-shadow: 0 0 0 1px var(--cds-border), var(--cds-shadow-sm);
+
+  /* 4. 交互填充与文本色阶 */
+  --cds-fill-ghost-hover: var(--cds-alpha-1);
+  --cds-fill-ghost-selected: var(--cds-alpha-2);
+  --cds-fill-secondary: var(--cds-alpha-2);
+  --cds-fill-secondary-hover: rgba(21, 21, 21, 0.14);
+
+  --cds-text-primary: #151515;
+  --cds-text-secondary: #525252;
+  --cds-text-muted: #8a8a8a;
+
+  --cds-segmented-track: rgba(0, 0, 0, 0.06);
+  --cds-segmented-thumb: #ffffff;
+
+  /* 5. 圆角阶梯 (Radius Hierarchy) */
+  --radius-xs: 2px;
+  --radius-sm: 4px;
+  --radius-md: 6px;
+  --radius-lg: 8px;
+  --cds-panel-radius: 10px;
+  --radius-xl: 12px;
+  --radius-2xl: 16px;
+  --df-radius-pill: 999px;
+
+  /* 6. 语义化映射 */
+  --cds-bg-surface: var(--cds-surface-2);
+  --cds-bg-surface-elevated: var(--cds-surface-3);
+  --cds-bg-primary: var(--cds-surface-0);
+  --cds-bg-secondary: var(--cds-surface-1);
+  --cds-bg-hover: var(--cds-fill-ghost-hover);
+  --cds-border-subtle: var(--cds-alpha-2);
+  --cds-fill-brand: var(--cds-clay);
+  --cds-fill-brand-hover: var(--cds-clay-hover);
+  --cds-fill-brand-subtle: var(--cds-clay-light);
+  --cds-fill-danger: #ef4444;
+}
+
+/* ==========================================================================
+   Dark Mode 暗色模式变量重载
+   ========================================================================== */
+[data-theme="dark"],
+.dark {
+  --cds-surface-0: #0b0b0a;        /* Canvas Obsidian */
+  --cds-surface-1: #151515;        /* 侧边栏 */
+  --cds-surface-2: #1a1a19;        /* 卡片 */
+  --cds-surface-3: #20201e;        /* 浮动面板与输入框 */
+  --cds-surface-popover: #222220;
+
+  --cds-clay: #d97757;
+  --cds-clay-hover: #e08264;
+  --cds-clay-light: rgba(217, 119, 87, 0.15);
+  --cds-clay-glow: rgba(217, 119, 87, 0.35);
+
+  --cds-alpha-0: hsla(0, 0%, 100%, 0);
+  --cds-alpha-1: hsla(0, 0%, 100%, 0.05);
+  --cds-alpha-2: hsla(0, 0%, 100%, 0.09);
+  --cds-alpha-3: hsla(0, 0%, 100%, 0.18);
+  --cds-alpha-4: hsla(0, 0%, 100%, 0.30);
+
+  --cds-border: var(--cds-alpha-2);
+  --cds-border-strong: var(--cds-alpha-3);
+
+  --cds-shadow-color: rgba(0, 0, 0, 0.40);
+  --cds-shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.4), 0 2px 8px 0 var(--cds-shadow-color);
+  --cds-shadow-md: 0 2px 4px 0 rgba(0, 0, 0, 0.4), 0 6px 16px 0 var(--cds-shadow-color);
+  --cds-shadow-lg: 0 4px 8px 0 rgba(0, 0, 0, 0.5), 0 16px 36px -2px var(--cds-shadow-color);
+  --cds-shadow-popover: 0 8px 28px rgba(0, 0, 0, 0.65), 0 2px 8px rgba(0, 0, 0, 0.45);
+  --cds-panel-shadow: 0 0 0 1px var(--cds-border), var(--cds-shadow-sm);
+
+  --cds-fill-ghost-hover: var(--cds-alpha-1);
+  --cds-fill-ghost-selected: var(--cds-alpha-2);
+  --cds-fill-secondary: var(--cds-alpha-2);
+  --cds-fill-secondary-hover: rgba(255, 255, 255, 0.14);
+
+  --cds-text-primary: #f5f5f5;
+  --cds-text-secondary: #a3a3a3;
+  --cds-text-muted: #666666;
+
+  --cds-segmented-track: rgba(255, 255, 255, 0.08);
+  --cds-segmented-thumb: #2c2c2a;
+
+  --cds-bg-surface: var(--cds-surface-2);
+  --cds-bg-surface-elevated: var(--cds-surface-3);
+  --cds-bg-primary: var(--cds-surface-0);
+  --cds-bg-secondary: var(--cds-surface-1);
+  --cds-bg-hover: var(--cds-fill-ghost-hover);
+  --cds-border-subtle: var(--cds-alpha-2);
+  --cds-fill-brand: var(--cds-clay);
+  --cds-fill-brand-hover: var(--cds-clay-hover);
+  --cds-fill-brand-subtle: rgba(217, 119, 87, 0.15);
+  --cds-fill-danger: #f87171;
+}
+
+/* ==========================================================================
+   物理动效关键帧 (Keyframe Animations)
+   ========================================================================== */
+
+/* 1. 运行态绿光双环脉冲扩散 (1.2s) */
+@keyframes dframe-dot-pulse {
+  0% {
+    transform: scale(0.95);
+    opacity: 0.9;
+  }
+  70% {
+    transform: scale(2.4);
+    opacity: 0;
+  }
+  100% {
+    transform: scale(2.4);
+    opacity: 0;
+  }
+}
+
+/* 2. 陶土明度呼吸动效 (2.4s) */
+@keyframes dframe-clay-breathe {
+  0%, 100% {
+    opacity: 0.4;
+    transform: scale(0.96);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.04);
+    box-shadow: 0 0 8px 1px var(--cds-clay-glow);
+  }
+}
+
+/* 3. 按钮按压物理微弹反馈 */
+.cds-press-feedback {
+  transition: transform 120ms cubic-bezier(0.2, 0, 0, 1), background-color 150ms ease;
+}
+.cds-press-feedback:active {
+  transform: scale(0.98);
+}
