@@ -1,5 +1,8 @@
 export type RestartPolicy = "no" | "always" | "on-failure";
 
+export type ThemeSetting = "auto" | "light" | "dark";
+export type ResolvedTheme = "light" | "dark";
+
 export interface AgentProfile {
   id: string;
   name: string;
