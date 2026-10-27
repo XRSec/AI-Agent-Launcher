@@ -7,7 +7,6 @@
 **跨平台轻量级 AI Agent 与本地服务进程管理桌面应用**  
 *A modern, lightweight cross-platform desktop process manager for AI Agents & developer services.*
 
-[![CI](https://github.com/XRSec/AI-Agent-Launcher/actions/workflows/ci.yml/badge.svg)](https://github.com/XRSec/AI-Agent-Launcher/actions/workflows/ci.yml)
 [![Release](https://github.com/XRSec/AI-Agent-Launcher/actions/workflows/release.yml/badge.svg)](https://github.com/XRSec/AI-Agent-Launcher/actions/workflows/release.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Tauri v2](https://img.shields.io/badge/Tauri-v2-24C8D8?logo=tauri&logoColor=white)](https://tauri.app)
@@ -187,7 +186,6 @@ AI-Agent-Launcher/
 │       ├── path_detect.rs     # 系统全局 PATH 自动侦测逻辑
 │       └── state.rs           # 本地 JSON 数据持久化与并发锁状态
 └── .github/workflows/         # 持续集成与发布
-    ├── ci.yml                 # 跨平台 (macOS/Ubuntu/Windows) PR 与 Push 自动化检查
     └── release.yml            # 基于 tauri-action@v1 的多平台自动构建发布工作流
 ```
 
