@@ -106,6 +106,7 @@ function handleKeydown(e: KeyboardEvent) {
   background-color: var(--cds-segmented-track, rgba(0, 0, 0, 0.06));
   border-radius: 999px;
   padding: 2px;
+  box-sizing: border-box;
   user-select: none;
   -webkit-user-select: none;
   outline: none;
@@ -163,6 +164,7 @@ function handleKeydown(e: KeyboardEvent) {
   white-space: nowrap;
   transition: color 150ms ease;
   outline: none;
+  box-sizing: border-box;
 }
 
 .size-sm .cds-segmented-btn {
@@ -181,5 +183,9 @@ function handleKeydown(e: KeyboardEvent) {
 .cds-segmented-label {
   display: inline-block;
   line-height: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 100%;
 }
 </style>

@@ -27,8 +27,8 @@ const fadeBottom = ref(0);
 const fadeLeft = ref(0);
 const fadeRight = ref(0);
 
-function updateScrollFades() {
-  const el = containerRef.value;
+function updateScrollFades(targetEl?: HTMLElement | null) {
+  const el = targetEl || (containerRef.value?.firstElementChild as HTMLElement) || containerRef.value;
   if (!el) return;
 
   if (props.orientation === "vertical" || props.orientation === "both") {
@@ -51,7 +51,8 @@ function updateScrollFades() {
 }
 
 function handleScroll(e: Event) {
-  updateScrollFades();
+  const target = (e.target as HTMLElement) || containerRef.value;
+  updateScrollFades(target);
   emit("scroll", e);
 }
 
@@ -128,7 +129,7 @@ defineExpose({
     ref="containerRef"
     class="cds-scroll-fade-container"
     :style="maskStyle"
-    @scroll="handleScroll"
+    @scroll.capture="handleScroll"
   >
     <slot></slot>
   </div>

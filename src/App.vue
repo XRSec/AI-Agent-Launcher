@@ -48,10 +48,23 @@ const themeOptions = computed<SegmentedItem[]>(() => [
 ]);
 
 const restartPolicyOptions = computed<SegmentedItem[]>(() => [
-  { label: t.value.restartNo, value: "no", title: t.value.restartNo },
-  { label: t.value.restartAlways, value: "always", title: t.value.restartAlways },
-  { label: t.value.restartOnFailure, value: "on-failure", title: t.value.restartOnFailure },
+  { label: t.value.restartNo, value: "no", title: t.value.restartNoDesc },
+  { label: t.value.restartAlways, value: "always", title: t.value.restartAlwaysDesc },
+  { label: t.value.restartOnFailure, value: "on-failure", title: t.value.restartOnFailureDesc },
 ]);
+
+const currentRestartPolicyDesc = computed(() => {
+  if (!currentProfile.value) return t.value.restartPolicyDesc;
+  switch (currentProfile.value.restartPolicy) {
+    case "always":
+      return t.value.restartAlwaysDesc;
+    case "on-failure":
+      return t.value.restartOnFailureDesc;
+    case "no":
+    default:
+      return t.value.restartNoDesc;
+  }
+});
 
 // Log scroll pinning composable
 const {
@@ -1360,13 +1373,14 @@ onMounted(async () => {
               <div class="form-row">
                 <label class="form-label">
                   <span class="label-title">{{ t.restartPolicyTitle }}</span>
-                  <span class="label-desc">{{ t.restartPolicyDesc }}</span>
+                  <span class="label-desc">{{ currentRestartPolicyDesc }}</span>
                 </label>
                 <div class="form-input-group">
                   <CdsSegmentedControl
                     :model-value="currentProfile.restartPolicy"
                     :items="restartPolicyOptions"
                     size="md"
+                    class="form-segmented-control"
                     @update:model-value="(val) => { currentProfile.restartPolicy = val as RestartPolicy; persistProfiles(); }"
                   />
                 </div>
@@ -2753,26 +2767,6 @@ onMounted(async () => {
   outline: none;
   resize: vertical;
   box-sizing: border-box;
-  scrollbar-width: thin;
-  scrollbar-color: #44403c #141413;
-}
-
-.code-textarea::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
-}
-
-.code-textarea::-webkit-scrollbar-track {
-  background: #141413;
-}
-
-.code-textarea::-webkit-scrollbar-thumb {
-  background: #44403c;
-  border-radius: 3px;
-}
-
-.code-textarea::-webkit-scrollbar-thumb:hover {
-  background: #57534e;
 }
 
 .code-textarea:focus {
@@ -2797,6 +2791,8 @@ onMounted(async () => {
   display: flex;
   flex-direction: column;
   gap: 2px;
+  min-width: 0;
+  flex: 1;
 }
 
 .label-title {
@@ -2809,6 +2805,7 @@ onMounted(async () => {
   font-size: 10.5px;
   font-weight: 400;
   color: var(--cds-text-muted, #8a8a8a);
+  line-height: 1.4;
 }
 
 .form-input-group {
@@ -2816,6 +2813,12 @@ onMounted(async () => {
   align-items: center;
   gap: 6px;
   width: 360px;
+  flex-shrink: 0;
+}
+
+.form-input-group .form-segmented-control,
+.form-input-group .cds-segmented-control {
+  width: 100%;
 }
 
 .text-input,
@@ -3204,8 +3207,8 @@ onMounted(async () => {
 
 /* Dedicated Realtime Console Body */
 .log-body {
-  flex: 1;
-  min-height: 0;
+  width: 100%;
+  height: 100%;
   overflow-y: auto;
   padding: 8px 16px 20px 16px;
   box-sizing: border-box;
@@ -3216,8 +3219,6 @@ onMounted(async () => {
   color: #e7e5e4;
   user-select: text;
   background: #1c1917;
-  scrollbar-width: thin;
-  scrollbar-color: #44403c #1c1917;
 }
 
 .log-bottom-spacer {
@@ -3226,22 +3227,37 @@ onMounted(async () => {
 }
 
 /* Dark Scrollbar for Terminal Console */
-.log-body::-webkit-scrollbar {
+.log-body::-webkit-scrollbar,
+.log-fade-wrap::-webkit-scrollbar,
+.log-section ::-webkit-scrollbar {
   width: 6px;
   height: 6px;
 }
 
-.log-body::-webkit-scrollbar-track {
-  background: #1c1917;
+.log-body::-webkit-scrollbar-track,
+.log-fade-wrap::-webkit-scrollbar-track,
+.log-section ::-webkit-scrollbar-track {
+  background: transparent;
 }
 
-.log-body::-webkit-scrollbar-thumb {
-  background: #44403c;
-  border-radius: 3px;
+.log-body::-webkit-scrollbar-thumb,
+.log-fade-wrap::-webkit-scrollbar-thumb,
+.log-section ::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.18);
+  border-radius: 999px;
+  transition: background-color 0.15s ease;
 }
 
-.log-body::-webkit-scrollbar-thumb:hover {
-  background: #57534e;
+.log-body::-webkit-scrollbar-thumb:hover,
+.log-fade-wrap::-webkit-scrollbar-thumb:hover,
+.log-section ::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.35);
+}
+
+.log-body::-webkit-scrollbar-thumb:active,
+.log-fade-wrap::-webkit-scrollbar-thumb:active,
+.log-section ::-webkit-scrollbar-thumb:active {
+  background: var(--cds-clay, #d97757);
 }
 
 .log-line {
@@ -3286,6 +3302,7 @@ onMounted(async () => {
   min-height: 0;
   height: calc(100% - 32px);
   width: 100%;
+  overflow: hidden;
 }
 
 .jump-to-bottom-pill {
